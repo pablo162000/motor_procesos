@@ -66,7 +66,7 @@
 		<!-- DEPENDENCIAS DE FLOWABLE-->
 		<dependency>
 			<groupId>org.flowable</groupId>
-			<artifactId>flowable-engine</artifactId>
+			<artifactId>flowable-spring-boot-starter</artifactId>
 			<version>7.0.0</version>
 		</dependency>
 

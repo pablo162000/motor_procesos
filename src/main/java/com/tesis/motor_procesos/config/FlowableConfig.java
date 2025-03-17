@@ -14,7 +14,7 @@ public class FlowableConfig {
         ProcessEngineConfiguration cfg = new StandaloneProcessEngineConfiguration()
                 .setJdbcUrl("jdbc:postgresql://localhost:5432/flowable_db") // Cambia el nombre de la BD
                 .setJdbcUsername("postgres")
-                .setJdbcPassword("postgres")
+                .setJdbcPassword("1234")
                 .setJdbcDriver("org.postgresql.Driver")
                 .setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
 
