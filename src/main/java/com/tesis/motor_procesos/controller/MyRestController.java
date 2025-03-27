@@ -71,6 +71,5 @@ public class MyRestController {
             this.assignee = assignee;
         }
 
-
     }
 }
