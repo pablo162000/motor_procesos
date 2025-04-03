@@ -7,7 +7,9 @@
     <process id="oneTaskProcess" name="The One Task Process">
         <startEvent id="theStart" />
         <sequenceFlow id="flow1" sourceRef="theStart" targetRef="theTask" />
-        <userTask id="theTask" name="my task" flowable:assignee="${person.id}"/>
+        <userTask id="theTask" name="Validación Tema"
+                  flowable:candidateGroups="${grupoDirectoresCarrera}"/>
+
         <sequenceFlow id="flow2" sourceRef="theTask" targetRef="theEnd" />
         <endEvent id="theEnd" />
     </process>

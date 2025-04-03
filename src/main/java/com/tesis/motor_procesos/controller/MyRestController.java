@@ -4,23 +4,25 @@ import com.tesis.motor_procesos.service.MyService;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @RestController
+@RequestMapping("/process")
+
 public class MyRestController {
 
     @Autowired
     private MyService myService;
 
-
-    @PostMapping(value = "/process")
-    public void startProcessInstance(@RequestBody StartProcessRepresentation startProcessRepresentation) {
-        myService.startProcess(startProcessRepresentation.getAssignee());
+    @PostMapping
+    public ResponseEntity<String> startProcess(@RequestBody Integer propuestaId) {
+        myService.startProcess(propuestaId);
+        return ResponseEntity.ok("Proceso iniciado con propuestaId: " + propuestaId);
     }
-
     // Endpoint para obtener las tareas asignadas a un usuario específico
     @RequestMapping(value = "/tasks", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<TaskRepresentation> getTasks(@RequestParam String assignee) {
@@ -59,17 +61,5 @@ public class MyRestController {
         }
     }
 
-    static class StartProcessRepresentation {
 
-        private String assignee;
-
-        public String getAssignee() {
-            return assignee;
-        }
-
-        public void setAssignee(String assignee) {
-            this.assignee = assignee;
-        }
-
-    }
 }

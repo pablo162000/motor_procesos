@@ -1,14 +1,14 @@
 package com.tesis.motor_procesos.service;
 
-import com.tesis.motor_procesos.repository.PersonRepository;
-import com.tesis.motor_procesos.repository.model.Person;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -18,6 +18,7 @@ import java.util.Map;
 @Transactional
 
 public class MyService {
+    private static final Logger logger = LogManager.getLogger(MyService.class);
 
 
     @Autowired
@@ -26,26 +27,19 @@ public class MyService {
     @Autowired
     private TaskService taskService;
 
-    @Autowired
-    private PersonRepository personRepository;
 
-    public void startProcess(String assignee) {
+    public void startProcess(Integer propuestaId) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("propuestaId", propuestaId);  // Guardamos el ID como variable del proceso
 
-        Person person = personRepository.findByUsername(assignee);
-        Map<String, Object> variables = new HashMap<String, Object>();
-        variables.put("person", person);
+        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
 
-        runtimeService.startProcessInstanceByKey("oneTaskProcess", variables);
+        logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
+        logger.info("📄 Propuesta asociada: {}", propuestaId);
     }
 
     public List<Task> getTasks(String assignee) {
         return taskService.createTaskQuery().taskAssignee(assignee).list();
     }
 
-    public void createDemoUsers() {
-        if (personRepository.findAll().size() == 0) {
-            personRepository.save(new Person("jbarrez", "Joram", "Barrez", new Date()));
-            personRepository.save(new Person("trademakers", "Tijs", "Rademakers", new Date()));
-        }
-    }
 }

@@ -21,7 +21,6 @@ public class MotorProcesosApplication {
 		return new CommandLineRunner() {
 			@Override
 			public void run(String... args) throws Exception {
-				myService.createDemoUsers();  // Llamamos al método que crea los usuarios de ejemplo
 			}
 		};
 	}
