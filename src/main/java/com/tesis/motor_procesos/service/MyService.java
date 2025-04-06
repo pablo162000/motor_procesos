@@ -28,18 +28,48 @@ public class MyService {
     private TaskService taskService;
 
 
-    public void startProcess(Integer propuestaId) {
+    public void startProcess(Integer propuestaId, Integer idEstudiante1,  Integer idDireccion, Integer idSecretaria) {
         Map<String, Object> variables = new HashMap<>();
-        variables.put("propuestaId", propuestaId);  // Guardamos el ID como variable del proceso
+        variables.put("propuestaId", propuestaId);
+        variables.put("idEstudiante1", idEstudiante1);
+        variables.put("idDireccion", idDireccion);
+        variables.put("idSecretaria", idSecretaria);
+
 
         ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
 
         logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
-        logger.info("📄 Propuesta asociada: {}", propuestaId);
+        logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}, idSecretaria={}",
+                propuestaId, idEstudiante1, idDireccion, idSecretaria);
     }
 
     public List<Task> getTasks(String assignee) {
         return taskService.createTaskQuery().taskAssignee(assignee).list();
     }
+
+    public Map<String, Object> getTaskVariables(String taskId) {
+        return taskService.getVariables(taskId); // Obtiene todas las variables de la tarea
+    }
+
+    public void completeTask(String taskId, Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            variables = new HashMap<>();
+        }
+
+        // Asegurar que siempre se pase la variable de decisión
+        if (!variables.containsKey("validacionAprobada")) {
+            throw new IllegalArgumentException("❌ La variable 'validacionAprobada' es requerida para continuar el proceso.");
+        }
+
+        // Completar la tarea con las variables proporcionadas
+        taskService.complete(taskId, variables);
+
+        // Agregar logging para seguimiento
+        System.out.println("✅ Tarea completada: " + taskId + " | Validación: " + variables.get("validacionAprobada"));
+    }
+
+
+
+
 
 }

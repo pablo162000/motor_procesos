@@ -2,15 +2,34 @@
 <definitions
         xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
         xmlns:flowable="http://flowable.org/bpmn"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+
         targetNamespace="Examples">
 
-    <process id="oneTaskProcess" name="The One Task Process">
+    <process id="procesoTesis" name="Ingreso propuesta tesis">
         <startEvent id="theStart" />
-        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="theTask" />
-        <userTask id="theTask" name="Validación Tema"
-                  flowable:candidateGroups="${grupoDirectoresCarrera}"/>
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="validacionTema" />
+        <userTask id="validacionTema" name="Validación Tema" flowable:assignee="${idDireccion}" />
 
-        <sequenceFlow id="flow2" sourceRef="theTask" targetRef="theEnd" />
+        <sequenceFlow id="flow2" sourceRef="validacionTema" targetRef="decisionValidacion" />
+
+        <exclusiveGateway id="decisionValidacion" name="¿Tema validado?" />
+
+        <!-- Flujo si fue aprobado -->
+        <sequenceFlow id="flowAprobado" sourceRef="decisionValidacion" targetRef="designarRevisores">
+            <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == true}</conditionExpression>
+        </sequenceFlow>
+
+
+        <userTask id="designarRevisores" name="Registrar aprobación" flowable:assignee="${idSecretaria}" />
+
+        <sequenceFlow id="flowFinAprobado" sourceRef="designarRevisores" targetRef="theEnd" />
+
+        <sequenceFlow id="flowRechazado" sourceRef="decisionValidacion" targetRef="theEnd">
+            <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == false}</conditionExpression>
+        </sequenceFlow>
+
+
         <endEvent id="theEnd" />
     </process>
 
