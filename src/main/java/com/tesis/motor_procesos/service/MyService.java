@@ -34,10 +34,7 @@ public class MyService {
         variables.put("idEstudiante1", idEstudiante1);
         variables.put("idDireccion", idDireccion);
         variables.put("idSecretaria", idSecretaria);
-
-
         ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
-
         logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
         logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}, idSecretaria={}",
                 propuestaId, idEstudiante1, idDireccion, idSecretaria);
@@ -52,24 +49,25 @@ public class MyService {
     }
 
     public void completeTask(String taskId, Map<String, Object> variables) {
+        if (taskId == null || taskId.isBlank()) {
+            throw new IllegalArgumentException("El ID de la tarea no puede ser nulo o vacío.");
+        }
+        // Verifica si la tarea existe antes de intentar completarla
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new IllegalArgumentException("❌ No se encontró una tarea con ID: " + taskId);
+        }
+        // Log de seguimiento (puedes usar Logger si ya lo tienes configurado)
+        System.out.println("🔄 Completando tarea: " + taskId);
+        System.out.println("📦 Variables recibidas: " + variables);
+
+        // Completa la tarea con o sin variables
         if (variables == null || variables.isEmpty()) {
-            variables = new HashMap<>();
+            taskService.complete(taskId);
+        } else {
+            taskService.complete(taskId, variables);
         }
-
-        // Asegurar que siempre se pase la variable de decisión
-        if (!variables.containsKey("validacionAprobada")) {
-            throw new IllegalArgumentException("❌ La variable 'validacionAprobada' es requerida para continuar el proceso.");
-        }
-
-        // Completar la tarea con las variables proporcionadas
-        taskService.complete(taskId, variables);
-
-        // Agregar logging para seguimiento
-        System.out.println("✅ Tarea completada: " + taskId + " | Validación: " + variables.get("validacionAprobada"));
+        System.out.println("✅ Tarea completada con éxito.");
     }
-
-
-
-
 
 }

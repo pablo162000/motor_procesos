@@ -10,20 +10,45 @@
         <startEvent id="theStart" />
         <sequenceFlow id="flow1" sourceRef="theStart" targetRef="validacionTema" />
         <userTask id="validacionTema" name="Validación Tema" flowable:assignee="${idDireccion}" />
-
         <sequenceFlow id="flow2" sourceRef="validacionTema" targetRef="decisionValidacion" />
-
         <exclusiveGateway id="decisionValidacion" name="¿Tema validado?" />
-
         <!-- Flujo si fue aprobado -->
         <sequenceFlow id="flowAprobado" sourceRef="decisionValidacion" targetRef="designarRevisores">
             <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == true}</conditionExpression>
         </sequenceFlow>
-
-
         <userTask id="designarRevisores" name="Registrar aprobación" flowable:assignee="${idSecretaria}" />
+        <sequenceFlow id="flow3" sourceRef="designarRevisores" targetRef="paraleloRevision" />
 
-        <sequenceFlow id="flowFinAprobado" sourceRef="designarRevisores" targetRef="theEnd" />
+        <!-- Gateway paralelo -->
+        <parallelGateway id="paraleloRevision" name="Inicio revisión" />
+
+        <!-- Revisor 1 -->
+        <sequenceFlow id="flow4" sourceRef="paraleloRevision" targetRef="revisarR1" />
+        <userTask id="revisarR1" name="Revisar proyecto [${est_nombre}]" flowable:assignee="${idRevisor1}" />
+        <boundaryEvent id="timerRevisor1" attachedToRef="revisarR1">
+            <timerEventDefinition>
+                <timeDuration>PT240H</timeDuration> <!-- 10 días -->
+            </timerEventDefinition>
+        </boundaryEvent>
+        <serviceTask id="recordarRevisor1" name="Recordar revisor 1" flowable:class="com.miempresa.RecordatorioRevisor1" />
+        <sequenceFlow id="flow5" sourceRef="timerRevisor1" targetRef="recordarRevisor1" />
+        <sequenceFlow id="flow6" sourceRef="revisarR1" targetRef="syncRevisores" />
+
+        <!-- Revisor 2 -->
+        <sequenceFlow id="flow7" sourceRef="paraleloRevision" targetRef="revisarR2" />
+        <userTask id="revisarR2" name="Revisar proyecto [${est_nombre}]" flowable:assignee="${idRevisor2}" />
+        <boundaryEvent id="timerRevisor2" attachedToRef="revisarR2">
+            <timerEventDefinition>
+                <timeDuration>PT240H</timeDuration>
+            </timerEventDefinition>
+        </boundaryEvent>
+        <serviceTask id="recordarRevisor2" name="Recordar revisor 2" flowable:class="com.miempresa.RecordatorioRevisor2" />
+        <sequenceFlow id="flow8" sourceRef="timerRevisor2" targetRef="recordarRevisor2" />
+        <sequenceFlow id="flow9" sourceRef="revisarR2" targetRef="syncRevisores" />
+
+        <!-- Gateway de sincronización -->
+        <parallelGateway id="syncRevisores" name="Esperar revisores" />
+        <sequenceFlow id="flow10" sourceRef="syncRevisores" targetRef="theEnd" />
 
         <sequenceFlow id="flowRechazado" sourceRef="decisionValidacion" targetRef="theEnd">
             <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == false}</conditionExpression>

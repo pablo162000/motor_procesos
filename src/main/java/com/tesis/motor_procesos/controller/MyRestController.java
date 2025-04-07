@@ -51,18 +51,15 @@ public class MyRestController {
 
 
     @PostMapping("/tasks/complete")
-    public ResponseEntity<String> completarTarea(
+    public ResponseEntity<String> completarTareaConVariables(
             @RequestParam String taskId,
-            @RequestParam boolean validacionAprobada) {
-
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("validacionAprobada", validacionAprobada);
+            @RequestBody(required = false) Map<String, Object> variables) {
 
         myService.completeTask(taskId, variables);
 
-        return ResponseEntity.ok("✅ Tarea completada con ID: " + taskId + " | Validación: " + validacionAprobada);
+        return ResponseEntity.ok("✅ Tarea completada con ID: " + taskId +
+                " | Variables: " + variables.toString());
     }
-
 
 
 
