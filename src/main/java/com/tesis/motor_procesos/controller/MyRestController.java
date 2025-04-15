@@ -24,9 +24,9 @@ public class MyRestController {
     public ResponseEntity<String> iniciarProceso(
             @RequestParam Integer propuestaId,
             @RequestParam(required = false) Integer idEstudiante1,
-            @RequestParam Integer idDireccion ,@RequestParam Integer idSecretaria)
+            @RequestParam Integer idDireccion )
     {
-        myService.startProcess(propuestaId, idEstudiante1,  idDireccion, idSecretaria);
+        myService.startProcess(propuestaId, idEstudiante1, idDireccion);
         return ResponseEntity.ok("Proceso iniciado con éxito.");
     }
 

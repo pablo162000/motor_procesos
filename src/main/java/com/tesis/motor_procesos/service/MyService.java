@@ -28,16 +28,15 @@ public class MyService {
     private TaskService taskService;
 
 
-    public void startProcess(Integer propuestaId, Integer idEstudiante1,  Integer idDireccion, Integer idSecretaria) {
+    public void startProcess(Integer propuestaId, Integer idEstudiante1,  Integer idDireccion) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("propuestaId", propuestaId);
         variables.put("idEstudiante1", idEstudiante1);
         variables.put("idDireccion", idDireccion);
-        variables.put("idSecretaria", idSecretaria);
         ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
         logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
-        logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}, idSecretaria={}",
-                propuestaId, idEstudiante1, idDireccion, idSecretaria);
+        logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}",
+                propuestaId, idEstudiante1, idDireccion);
     }
 
     public List<Task> getTasks(String assignee) {
