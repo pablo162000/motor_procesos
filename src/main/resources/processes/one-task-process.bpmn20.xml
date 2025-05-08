@@ -24,7 +24,7 @@
 
         <!-- Revisor 1 -->
         <sequenceFlow id="flow4" sourceRef="paraleloRevision" targetRef="revisarR1" />
-        <userTask id="revisarR1" name="Revisar proyecto [${est_nombre}]" flowable:assignee="${idRevisor1}" />
+        <userTask id="revisarR1" name="Revisar proyecto [${temaPropuesta}]" flowable:assignee="${idRevisor1}" />
         <boundaryEvent id="timerRevisor1" attachedToRef="revisarR1">
             <timerEventDefinition>
                 <timeDuration>PT240H</timeDuration> <!-- 10 días -->
