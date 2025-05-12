@@ -24,7 +24,7 @@
 
         <!-- Revisor 1 -->
         <sequenceFlow id="flow4" sourceRef="paraleloRevision" targetRef="revisarR1" />
-        <userTask id="revisarR1" name="Revisar proyecto [${temaPropuesta}]" flowable:assignee="${idRevisor1}" />
+        <userTask id="revisarR1" name="Revisar propuesta: [${temaPropuesta}]" flowable:assignee="${idRevisor1}" />
         <boundaryEvent id="timerRevisor1" attachedToRef="revisarR1">
             <timerEventDefinition>
                 <timeDuration>PT240H</timeDuration> <!-- 10 días -->
@@ -36,7 +36,7 @@
 
         <!-- Revisor 2 -->
         <sequenceFlow id="flow7" sourceRef="paraleloRevision" targetRef="revisarR2" />
-        <userTask id="revisarR2" name="Revisar proyecto [${est_nombre}]" flowable:assignee="${idRevisor2}" />
+        <userTask id="revisarR2" name="Revisar propuesta: [${temaPropuesta}]" flowable:assignee="${idRevisor2}" />
         <boundaryEvent id="timerRevisor2" attachedToRef="revisarR2">
             <timerEventDefinition>
                 <timeDuration>PT240H</timeDuration>
@@ -48,12 +48,30 @@
 
         <!-- Gateway de sincronización -->
         <parallelGateway id="syncRevisores" name="Esperar revisores" />
-        <sequenceFlow id="flow10" sourceRef="syncRevisores" targetRef="theEnd" />
+        <!-- Gateway para decidir si la nota es suficiente -->
+        <exclusiveGateway id="decisionNota" name="¿Nota mayor a 11?" />
+
+        <sequenceFlow id="flow10" sourceRef="syncRevisores" targetRef="decisionNota" />
+
+        <!-- Camino si la nota es mayor a 11 -->
+        <sequenceFlow id="flow11" sourceRef="decisionNota" targetRef="generarActa">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${notaFinal > 11}]]></conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="generarActa" name="Generar acta de aprobación" flowable:assignee="${idDireccion}" />
+        <sequenceFlow id="flow12" sourceRef="generarActa" targetRef="theEnd" />
+
+        <sequenceFlow id="flow13" sourceRef="decisionNota" targetRef="notificarRechazo">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${notaFinal <= 11}]]></conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="notificarRechazo" name="Notificar rechazo al estudiante" flowable:assignee="${idDireccion}" />
+
+        <sequenceFlow id="flow14" sourceRef="notificarRechazo" targetRef="theEnd" />
 
         <sequenceFlow id="flowRechazado" sourceRef="decisionValidacion" targetRef="theEnd">
             <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == false}</conditionExpression>
         </sequenceFlow>
-
 
         <endEvent id="theEnd" />
     </process>
