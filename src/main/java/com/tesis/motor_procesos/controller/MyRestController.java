@@ -50,6 +50,26 @@ public class MyRestController {
     }
 
 
+    @GetMapping("/tasks/by-assignee-and-key")
+    public ResponseEntity<List<TaskRepresentation>> obtenerTareasPorAssigneeYKey(@RequestParam String assignee, @RequestParam String taskKey) {
+        List<Task> tasks = myService.getTasksByAssigneeAndTaskKey(assignee, taskKey);
+
+        if (tasks.isEmpty()) {
+            return ResponseEntity.noContent().build(); // Devuelve 204 si no hay tareas
+        }
+
+        List<TaskRepresentation> dtos = tasks.stream()
+                .map(task -> {
+                    // Obtener variables del proceso para la tarea actual
+                    Map<String, Object> variables = myService.getTaskVariables(task.getId());
+                    return new TaskRepresentation(task.getId(), task.getName(), variables);
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+
+
+
     @PostMapping("/tasks/complete")
     public ResponseEntity<String> completarTareaConVariables(
             @RequestParam String taskId,

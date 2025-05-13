@@ -43,6 +43,14 @@ public class MyService {
         return taskService.createTaskQuery().taskAssignee(assignee).list();
     }
 
+    public List<Task> getTasksByAssigneeAndTaskKey(String assignee, String taskDefinitionKey) {
+        return taskService.createTaskQuery()
+                .taskAssignee(assignee)
+                .taskDefinitionKey(taskDefinitionKey)
+                .list();
+    }
+
+
     public Map<String, Object> getTaskVariables(String taskId) {
         return taskService.getVariables(taskId); // Obtiene todas las variables de la tarea
     }
