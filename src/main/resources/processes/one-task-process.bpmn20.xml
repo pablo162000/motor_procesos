@@ -1,79 +1,234 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions
-        xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-        xmlns:flowable="http://flowable.org/bpmn"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-
-        targetNamespace="Examples">
-
-    <process id="procesoTesis" name="Ingreso propuesta tesis">
-        <startEvent id="theStart" />
-        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="validacionTema" />
-        <userTask id="validacionTema" name="Validación Tema" flowable:assignee="${idDireccion}" />
-        <sequenceFlow id="flow2" sourceRef="validacionTema" targetRef="decisionValidacion" />
-        <exclusiveGateway id="decisionValidacion" name="¿Tema validado?" />
-        <!-- Flujo si fue aprobado -->
-        <sequenceFlow id="flowAprobado" sourceRef="decisionValidacion" targetRef="designarRevisores">
-            <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == true}</conditionExpression>
-        </sequenceFlow>
-        <userTask id="designarRevisores" name="Registrar aprobación" flowable:assignee="${idSecretaria}" />
-        <sequenceFlow id="flow3" sourceRef="designarRevisores" targetRef="paraleloRevision" />
-
-        <!-- Gateway paralelo -->
-        <parallelGateway id="paraleloRevision" name="Inicio revisión" />
-
-        <!-- Revisor 1 -->
-        <sequenceFlow id="flow4" sourceRef="paraleloRevision" targetRef="revisarR1" />
-        <userTask id="revisarR1" name="Revisar propuesta: [${temaPropuesta}]" flowable:assignee="${idRevisor1}" />
-        <boundaryEvent id="timerRevisor1" attachedToRef="revisarR1">
-            <timerEventDefinition>
-                <timeDuration>PT240H</timeDuration> <!-- 10 días -->
-            </timerEventDefinition>
-        </boundaryEvent>
-        <serviceTask id="recordarRevisor1" name="Recordar revisor 1" flowable:delegateExpression="${recordatorioRevisor1}" />
-        <sequenceFlow id="flow5" sourceRef="timerRevisor1" targetRef="recordarRevisor1" />
-        <sequenceFlow id="flow6" sourceRef="revisarR1" targetRef="syncRevisores" />
-
-        <!-- Revisor 2 -->
-        <sequenceFlow id="flow7" sourceRef="paraleloRevision" targetRef="revisarR2" />
-        <userTask id="revisarR2" name="Revisar propuesta: [${temaPropuesta}]" flowable:assignee="${idRevisor2}" />
-        <boundaryEvent id="timerRevisor2" attachedToRef="revisarR2">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:flowable="http://flowable.org/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" typeLanguage="http://www.w3.org/2001/XMLSchema" expressionLanguage="http://www.w3.org/1999/XPath" targetNamespace="Examples" exporter="Flowable Open Source Modeler" exporterVersion="6.8.0">
+    <process id="procesoTesis" name="Ingreso propuesta tesis" isExecutable="true">
+        <startEvent id="theStart" name="Envío Propuesta" flowable:formFieldValidation="true"></startEvent>
+        <userTask id="validacionTema" name="Validación Tema" flowable:assignee="${idDireccion}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <sequenceFlow id="flow2" sourceRef="validacionTema" targetRef="decisionValidacion"></sequenceFlow>
+        <exclusiveGateway id="decisionValidacion" name="¿Tema validado?"></exclusiveGateway>
+        <userTask id="designarRevisores" name="Registrar aprobación" flowable:assignee="${idSecretaria}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <parallelGateway id="paraleloRevision" name="Inicio revisión"></parallelGateway>
+        <sequenceFlow id="flow4" sourceRef="paraleloRevision" targetRef="revisarR1"></sequenceFlow>
+        <userTask id="revisarR1" name="Revisar propuesta" flowable:assignee="${idRevisor1}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <boundaryEvent id="timerRevisor1" attachedToRef="revisarR1" cancelActivity="true">
             <timerEventDefinition>
                 <timeDuration>PT240H</timeDuration>
             </timerEventDefinition>
         </boundaryEvent>
-        <serviceTask id="recordarRevisor2" name="Recordar revisor 2" flowable:delegateExpression="${recordatorioRevisor2}" />
-        <sequenceFlow id="flow8" sourceRef="timerRevisor2" targetRef="recordarRevisor2" />
-        <sequenceFlow id="flow9" sourceRef="revisarR2" targetRef="syncRevisores" />
-
-        <!-- Gateway de sincronización -->
-        <parallelGateway id="syncRevisores" name="Esperar revisores" />
-        <!-- Gateway para decidir si la nota es suficiente -->
-        <exclusiveGateway id="decisionNota" name="¿Nota mayor a 11?" />
-
-        <sequenceFlow id="flow10" sourceRef="syncRevisores" targetRef="decisionNota" />
-
-        <!-- Camino si la nota es mayor a 11 -->
-        <sequenceFlow id="flow11" sourceRef="decisionNota" targetRef="generarActa">
-            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${notaFinal > 11}]]></conditionExpression>
+        <serviceTask id="recordarRevisor1" name="Recordar revisor 1" flowable:delegateExpression="${recordatorioRevisor1}"></serviceTask>
+        <userTask id="revisarR2" name="Revisar propuesta" flowable:assignee="${idRevisor2}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <boundaryEvent id="timerRevisor2" attachedToRef="revisarR2" cancelActivity="true">
+            <timerEventDefinition>
+                <timeDuration>PT240H</timeDuration>
+            </timerEventDefinition>
+        </boundaryEvent>
+        <serviceTask id="recordarRevisor2" name="Recordar revisor 2" flowable:delegateExpression="${recordatorioRevisor2}"></serviceTask>
+        <sequenceFlow id="flow8" sourceRef="timerRevisor2" targetRef="recordarRevisor2"></sequenceFlow>
+        <sequenceFlow id="flow9" sourceRef="revisarR2" targetRef="syncRevisores"></sequenceFlow>
+        <parallelGateway id="syncRevisores" name="Esperar revisores"></parallelGateway>
+        <exclusiveGateway id="decisionNota" name="¿Nota mayor a 11?"></exclusiveGateway>
+        <sequenceFlow id="flow10" sourceRef="syncRevisores" targetRef="decisionNota"></sequenceFlow>
+        <userTask id="generarActa" name="Generar acta de aprobación" flowable:assignee="${idDireccion}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <userTask id="notificarRechazo" name="Notificar rechazo al estudiante" flowable:assignee="${idDireccion}" flowable:formFieldValidation="true">
+            <extensionElements>
+                <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
+            </extensionElements>
+        </userTask>
+        <endEvent id="theEnd" name="Tema no Valido"></endEvent>
+        <sequenceFlow id="flow3" sourceRef="designarRevisores" targetRef="paraleloRevision"></sequenceFlow>
+        <sequenceFlow id="flow5" sourceRef="timerRevisor1" targetRef="recordarRevisor1"></sequenceFlow>
+        <sequenceFlow id="flow7" sourceRef="paraleloRevision" targetRef="revisarR2"></sequenceFlow>
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="validacionTema"></sequenceFlow>
+        <sequenceFlow id="flow6" sourceRef="revisarR1" targetRef="syncRevisores"></sequenceFlow>
+        <endEvent id="theEnd2"></endEvent>
+        <sequenceFlow id="sid-9D2DC354-D29E-4050-9C57-C810947AE550" sourceRef="notificarRechazo" targetRef="theEnd2"></sequenceFlow>
+        <sequenceFlow id="sid-4E071919-A6DD-407E-901D-1A663517AD8E" sourceRef="generarActa" targetRef="theEnd2"></sequenceFlow>
+        <sequenceFlow id="flowRechazado" name="NO" sourceRef="decisionValidacion" targetRef="theEnd">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${validacionAprobada == false}]]></conditionExpression>
         </sequenceFlow>
-
-        <userTask id="generarActa" name="Generar acta de aprobación" flowable:assignee="${idDireccion}" />
-        <sequenceFlow id="flow12" sourceRef="generarActa" targetRef="theEnd" />
-
-        <sequenceFlow id="flow13" sourceRef="decisionNota" targetRef="notificarRechazo">
-            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${notaFinal <= 11}]]></conditionExpression>
+        <sequenceFlow id="flowAprobado" name="SI" sourceRef="decisionValidacion" targetRef="designarRevisores">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${validacionAprobada == true}]]></conditionExpression>
         </sequenceFlow>
+        <sequenceFlow id="flow11" name="SI" sourceRef="decisionNota" targetRef="generarActa">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${((NotaRevisor1 + NotaRevisor2) / 2) >= 11}]]></conditionExpression>
 
-        <userTask id="notificarRechazo" name="Notificar rechazo al estudiante" flowable:assignee="${idDireccion}" />
-
-        <sequenceFlow id="flow14" sourceRef="notificarRechazo" targetRef="theEnd" />
-
-        <sequenceFlow id="flowRechazado" sourceRef="decisionValidacion" targetRef="theEnd">
-            <conditionExpression xsi:type="tFormalExpression">${validacionAprobada == false}</conditionExpression>
         </sequenceFlow>
-
-        <endEvent id="theEnd" />
+        <sequenceFlow id="flow13" name="NO" sourceRef="decisionNota" targetRef="notificarRechazo">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${((NotaRevisor1 +NotaRevisor2)/2) < 11}]]></conditionExpression>
+        </sequenceFlow>
+        <textAnnotation id="sid-78C58D6D-0A13-4CB4-B1D6-F43EB6992C07">
+            <text>Revisor1</text>
+        </textAnnotation>
+        <association id="sid-19CB40D2-D368-4953-8E3A-1A16995FEE40" sourceRef="revisarR1" targetRef="sid-78C58D6D-0A13-4CB4-B1D6-F43EB6992C07" associationDirection="None"></association>
+        <textAnnotation id="sid-A84B8808-0176-4FF7-AB5D-9B1D2FCD8615">
+            <text>Revisor2</text>
+        </textAnnotation>
+        <association id="sid-E507C586-78C1-4143-972E-5446B1F6C2C0" sourceRef="revisarR2" targetRef="sid-A84B8808-0176-4FF7-AB5D-9B1D2FCD8615" associationDirection="None"></association>
+        <textAnnotation id="sid-A42C92FA-5A21-4DEE-9249-95F377086556">
+            <text>Envío Propuesta</text>
+        </textAnnotation>
+        <association id="sid-0DD187FF-17A8-4A81-BA6A-B8526225CFBD" sourceRef="theStart" targetRef="sid-A42C92FA-5A21-4DEE-9249-95F377086556" associationDirection="None"></association>
     </process>
-
+    <bpmndi:BPMNDiagram id="BPMNDiagram_procesoTesis">
+        <bpmndi:BPMNPlane bpmnElement="procesoTesis" id="BPMNPlane_procesoTesis">
+            <bpmndi:BPMNShape bpmnElement="theStart" id="BPMNShape_theStart">
+                <omgdc:Bounds height="30.0" width="30.0" x="131.3907678162559" y="640.1462566722503"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="validacionTema" id="BPMNShape_validacionTema">
+                <omgdc:Bounds height="60.00000000000003" width="100.00000000000001" x="96.39076977413087" y="19.27815395482618"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="decisionValidacion" id="BPMNShape_decisionValidacion">
+                <omgdc:Bounds height="39.999999999999986" width="40.0" x="269.89415536756644" y="29.27815351854771"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="designarRevisores" id="BPMNShape_designarRevisores">
+                <omgdc:Bounds height="60.0" width="100.00000000000003" x="239.89415179286502" y="192.7815365265814"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="paraleloRevision" id="BPMNShape_paraleloRevision">
+                <omgdc:Bounds height="40.0" width="40.0" x="424.1193870061759" y="202.7815335049011"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="revisarR1" id="BPMNShape_revisarR1">
+                <omgdc:Bounds height="60.0" width="100.0" x="674.7353884189162" y="192.781536675593"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="timerRevisor1" id="BPMNShape_timerRevisor1">
+                <omgdc:Bounds height="30.999999999999915" width="31.0" x="739.9424952001027" y="237.9886434567796"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="recordarRevisor1" id="BPMNShape_recordarRevisor1">
+                <omgdc:Bounds height="60.0" width="100.0" x="705.4424846881905" y="303.45045875545463"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="revisarR2" id="BPMNShape_revisarR2">
+                <omgdc:Bounds height="60.0" width="100.0" x="394.1193811333394" y="385.88032080269903"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="timerRevisor2" id="BPMNShape_timerRevisor2">
+                <omgdc:Bounds height="31.0" width="31.0" x="459.32648791452596" y="431.0874275838856"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="recordarRevisor2" id="BPMNShape_recordarRevisor2">
+                <omgdc:Bounds height="60.0" width="100.00000000000006" x="424.82647525371027" y="501.23200282548055"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="syncRevisores" id="BPMNShape_syncRevisores">
+                <omgdc:Bounds height="40.0" width="40.0" x="867.5169279671779" y="395.8803323028289"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="decisionNota" id="BPMNShape_decisionNota">
+                <omgdc:Bounds height="40.0" width="40.0" x="1041.0202980482022" y="313.450458606443"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="generarActa" id="BPMNShape_generarActa">
+                <omgdc:Bounds height="60.0" width="100.0" x="1136.698887852084" y="154.22522704233944"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="notificarRechazo" id="BPMNShape_notificarRechazo">
+                <omgdc:Bounds height="60.000000000000014" width="100.00000000000011" x="1011.020298495237" y="38.5563073351186"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="theEnd" id="BPMNShape_theEnd">
+                <omgdc:Bounds height="28.000000000000007" width="28.0" x="481.9538488706544" y="35.27815342914074"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="theEnd2" id="BPMNShape_theEnd2">
+                <omgdc:Bounds height="28.0" width="28.0" x="1172.6989047902175" y="54.55630733511862"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="sid-78C58D6D-0A13-4CB4-B1D6-F43EB6992C07" id="BPMNShape_sid-78C58D6D-0A13-4CB4-B1D6-F43EB6992C07">
+                <omgdc:Bounds height="50.0" width="100.0" x="790.4043121478733" y="134.94707768378322"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="sid-A84B8808-0176-4FF7-AB5D-9B1D2FCD8615" id="BPMNShape_sid-A84B8808-0176-4FF7-AB5D-9B1D2FCD8615">
+                <omgdc:Bounds height="50.0" width="100.00000000000006" x="289.1723050133896" y="308.45046327721883"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="sid-A42C92FA-5A21-4DEE-9249-95F377086556" id="BPMNShape_sid-A42C92FA-5A21-4DEE-9249-95F377086556">
+                <omgdc:Bounds height="50.0" width="100.0" x="206.3907678162559" y="630.1462566722503"></omgdc:Bounds>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge bpmnElement="sid-E507C586-78C1-4143-972E-5446B1F6C2C0" id="BPMNEdge_sid-E507C586-78C1-4143-972E-5446B1F6C2C0" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="1.0000000000000007" flowable:targetDockerY="24.0">
+                <omgdi:waypoint x="394.1193811333394" y="388.7833925503967"></omgdi:waypoint>
+                <omgdi:waypoint x="338.0268274700108" y="358.4004632772188"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow13" id="BPMNEdge_flow13" flowable:sourceDockerX="20.0" flowable:sourceDockerY="20.0" flowable:targetDockerX="50.00000000000006" flowable:targetDockerY="30.000000000000014">
+                <omgdi:waypoint x="1061.02029808187" y="313.450458640195"></omgdi:waypoint>
+                <omgdi:waypoint x="1061.0202984446091" y="98.5063073351186"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flowAprobado" id="BPMNEdge_flowAprobado" flowable:sourceDockerX="20.0" flowable:sourceDockerY="19.999999999999993" flowable:targetDockerX="50.000000000000014" flowable:targetDockerY="30.0">
+                <omgdi:waypoint x="289.89415495550514" y="69.22240807345348"></omgdi:waypoint>
+                <omgdi:waypoint x="289.89415240992685" y="192.7815365265814"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="sid-9D2DC354-D29E-4050-9C57-C810947AE550" id="BPMNEdge_sid-9D2DC354-D29E-4050-9C57-C810947AE550" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="14.0" flowable:targetDockerY="14.0">
+                <omgdi:waypoint x="1110.970298495207" y="68.55630733511862"></omgdi:waypoint>
+                <omgdi:waypoint x="1172.6989047902175" y="68.55630733511862"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flowRechazado" id="BPMNEdge_flowRechazado" flowable:sourceDockerX="20.0" flowable:sourceDockerY="19.999999999999993" flowable:targetDockerX="14.0" flowable:targetDockerY="14.000000000000004">
+                <omgdi:waypoint x="309.839316894052" y="49.27815350986994"></omgdi:waypoint>
+                <omgdi:waypoint x="481.95384171053246" y="49.27815343519349"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="sid-0DD187FF-17A8-4A81-BA6A-B8526225CFBD" id="BPMNEdge_sid-0DD187FF-17A8-4A81-BA6A-B8526225CFBD" flowable:sourceDockerX="15.0" flowable:sourceDockerY="15.0" flowable:targetDockerX="1.0" flowable:targetDockerY="24.0">
+                <omgdi:waypoint x="161.3388000502349" y="654.9003873992524"></omgdi:waypoint>
+                <omgdi:waypoint x="206.39076781625198" y="654.1618304427421"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow1" id="BPMNEdge_flow1" flowable:sourceDockerX="15.0" flowable:sourceDockerY="15.0" flowable:targetDockerX="50.00000000000002" flowable:targetDockerY="30.000000000000014">
+                <omgdi:waypoint x="146.39076786456712" y="640.1462566722503"></omgdi:waypoint>
+                <omgdi:waypoint x="146.3907696771853" y="79.22815395482621"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow2" id="BPMNEdge_flow2" flowable:sourceDockerX="50.00000000000002" flowable:sourceDockerY="30.000000000000014" flowable:targetDockerX="20.0" flowable:targetDockerY="19.999999999999993">
+                <omgdi:waypoint x="196.34076977412593" y="49.27815380281636"></omgdi:waypoint>
+                <omgdi:waypoint x="269.894153944887" y="49.27815357919962"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow3" id="BPMNEdge_flow3" flowable:sourceDockerX="50.000000000000014" flowable:sourceDockerY="30.0" flowable:targetDockerX="20.0" flowable:targetDockerY="20.0">
+                <omgdi:waypoint x="339.8441517928651" y="222.7815355469491"></omgdi:waypoint>
+                <omgdi:waypoint x="424.1193873980287" y="222.7815338957743"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow4" id="BPMNEdge_flow4" flowable:sourceDockerX="20.0" flowable:sourceDockerY="20.0" flowable:targetDockerX="50.0" flowable:targetDockerY="30.0">
+                <omgdi:waypoint x="464.06583336722105" y="222.78153373031697"></omgdi:waypoint>
+                <omgdi:waypoint x="674.7353869950776" y="222.7815361106409"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="sid-4E071919-A6DD-407E-901D-1A663517AD8E" id="BPMNEdge_sid-4E071919-A6DD-407E-901D-1A663517AD8E" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="14.0" flowable:targetDockerY="14.0">
+                <omgdi:waypoint x="1186.6988922378525" y="154.22522704233944"></omgdi:waypoint>
+                <omgdi:waypoint x="1186.6989027401087" y="82.50623945750858"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="sid-19CB40D2-D368-4953-8E3A-1A16995FEE40" id="BPMNEdge_sid-19CB40D2-D368-4953-8E3A-1A16995FEE40" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="1.0" flowable:targetDockerY="23.999999999999996">
+                <omgdi:waypoint x="756.0152691795325" y="192.781536675593"></omgdi:waypoint>
+                <omgdi:waypoint x="790.4043121478733" y="159.8566879287118"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow5" id="BPMNEdge_flow5" flowable:sourceDockerX="15.500000000000002" flowable:sourceDockerY="15.49999999999996" flowable:targetDockerX="50.0" flowable:targetDockerY="30.0">
+                <omgdi:waypoint x="755.4424928481266" y="268.93864050594135"></omgdi:waypoint>
+                <omgdi:waypoint x="755.4424886254669" y="303.45045875545463"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow6" id="BPMNEdge_flow6" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="20.0" flowable:targetDockerY="20.0">
+                <omgdi:waypoint x="774.6853884189161" y="222.78153667559297"></omgdi:waypoint>
+                <omgdi:waypoint x="887.5169279671779" y="222.78153667559297"></omgdi:waypoint>
+                <omgdi:waypoint x="887.5169279671779" y="395.8803323028289"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow10" id="BPMNEdge_flow10" flowable:sourceDockerX="20.0" flowable:sourceDockerY="20.0" flowable:targetDockerX="20.0" flowable:targetDockerY="20.0">
+                <omgdi:waypoint x="907.4611821109086" y="415.8803323028289"></omgdi:waypoint>
+                <omgdi:waypoint x="1061.0202980482022" y="415.8803323028289"></omgdi:waypoint>
+                <omgdi:waypoint x="1061.0202980482022" y="353.36251376887003"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow7" id="BPMNEdge_flow7" flowable:sourceDockerX="20.0" flowable:sourceDockerY="20.0" flowable:targetDockerX="50.0" flowable:targetDockerY="30.0">
+                <omgdi:waypoint x="444.11938639790316" y="242.72637103529564"></omgdi:waypoint>
+                <omgdi:waypoint x="444.11938204422785" y="385.88032080269903"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow8" id="BPMNEdge_flow8" flowable:sourceDockerX="15.500000000000002" flowable:sourceDockerY="15.500000000000002" flowable:targetDockerX="50.000000000000036" flowable:targetDockerY="29.999999999999996">
+                <omgdi:waypoint x="474.8264855960945" y="462.0374249505495"></omgdi:waypoint>
+                <omgdi:waypoint x="474.8264797335181" y="501.23200282548055"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow11" id="BPMNEdge_flow11" flowable:sourceDockerX="20.0" flowable:sourceDockerY="20.0" flowable:targetDockerX="50.0" flowable:targetDockerY="30.0">
+                <omgdi:waypoint x="1080.96236744557" y="333.450458606443"></omgdi:waypoint>
+                <omgdi:waypoint x="1186.698887852084" y="333.450458606443"></omgdi:waypoint>
+                <omgdi:waypoint x="1186.698887852084" y="214.17522704233946"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flow9" id="BPMNEdge_flow9" flowable:sourceDockerX="50.0" flowable:sourceDockerY="30.0" flowable:targetDockerX="20.0" flowable:targetDockerY="20.0">
+                <omgdi:waypoint x="494.06938113333945" y="415.88032209822154"></omgdi:waypoint>
+                <omgdi:waypoint x="867.5169279671779" y="415.8803317841012"></omgdi:waypoint>
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
 </definitions>

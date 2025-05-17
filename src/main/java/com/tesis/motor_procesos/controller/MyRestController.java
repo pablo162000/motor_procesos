@@ -1,21 +1,40 @@
 package com.tesis.motor_procesos.controller;
 
 import com.tesis.motor_procesos.service.MyService;
+import jakarta.servlet.http.HttpServletResponse;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.ProcessEngine;
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.image.impl.DefaultProcessDiagramGenerator;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+
+import java.io.InputStream;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/process")
 
 public class MyRestController {
+
+    @Autowired
+    private HistoryService historyService;
+
+    @Autowired
+    private RepositoryService repositoryService;
+
+    @Autowired
+    private RuntimeService runtimeService;
+
+    @Autowired
+    private ProcessEngine processEngine;
 
     @Autowired
     private MyService myService;
@@ -106,6 +125,56 @@ public class MyRestController {
         public Map<String, Object> getVariables() {
             return variables;
         }
+    }
+
+    @GetMapping("/image/{processInstanceId}")
+    @ResponseBody
+    public byte[] image(@PathVariable String processInstanceId, HttpServletResponse response) throws Exception {
+        response.setContentType("image/png");
+
+        HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+
+        if (processInstance == null) {
+            throw new RuntimeException("No existe el proceso con ID: " + processInstanceId);
+        }
+
+        BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
+
+        // Obtener las actividades activas y finalizadas
+        List<String> activeActivities;
+        try {
+            activeActivities = runtimeService.getActiveActivityIds(processInstanceId);
+        } catch (Exception ex) {
+            activeActivities = List.of();
+        }
+
+        List<String> completedActivities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .finished()
+                .list()
+                .stream()
+                .map(h -> h.getActivityId())
+                .toList();
+
+        DefaultProcessDiagramGenerator generator = new DefaultProcessDiagramGenerator();
+
+        InputStream is = generator.generateDiagram(bpmnModel, "png",
+                completedActivities, activeActivities,
+                null, // Eliminar etiquetas en las líneas
+                null, // No mostrar nombres de actividades
+                null, // No mostrar anotaciones
+                //"Arial",
+                //"Arial",
+                //"Arial",
+                processEngine.getProcessEngineConfiguration().getClassLoader(),
+                1.0, true);
+
+        String base64 = Base64.getEncoder().encodeToString(is.readAllBytes());
+        System.out.println(base64);
+
+        return is.readAllBytes();
     }
 
 
