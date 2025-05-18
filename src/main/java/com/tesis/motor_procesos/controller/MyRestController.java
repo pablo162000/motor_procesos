@@ -3,6 +3,10 @@ package com.tesis.motor_procesos.controller;
 import com.tesis.motor_procesos.service.MyService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.Gateway;
+import org.flowable.bpmn.model.GraphicInfo;
+import org.flowable.bpmn.model.TextAnnotation;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
@@ -11,18 +15,25 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.image.impl.DefaultProcessDiagramGenerator;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.InputStream;
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
+
 
 @RestController
 @RequestMapping("/process")
 
 public class MyRestController {
+
 
     @Autowired
     private HistoryService historyService;
@@ -128,8 +139,7 @@ public class MyRestController {
     }
 
     @GetMapping("/image/{processInstanceId}")
-    @ResponseBody
-    public byte[] image(@PathVariable String processInstanceId, HttpServletResponse response) throws Exception {
+    public void image(@PathVariable String processInstanceId, HttpServletResponse response) throws Exception {
         response.setContentType("image/png");
 
         HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
@@ -142,12 +152,11 @@ public class MyRestController {
 
         BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
 
-        // Obtener las actividades activas y finalizadas
         List<String> activeActivities;
         try {
             activeActivities = runtimeService.getActiveActivityIds(processInstanceId);
         } catch (Exception ex) {
-            activeActivities = List.of();
+            activeActivities = List.of(); // Proceso finalizado
         }
 
         List<String> completedActivities = historyService.createHistoricActivityInstanceQuery()
@@ -158,24 +167,23 @@ public class MyRestController {
                 .map(h -> h.getActivityId())
                 .toList();
 
+
         DefaultProcessDiagramGenerator generator = new DefaultProcessDiagramGenerator();
 
-        InputStream is = generator.generateDiagram(bpmnModel, "png",
-                completedActivities, activeActivities,
-                null, // Eliminar etiquetas en las líneas
-                null, // No mostrar nombres de actividades
-                null, // No mostrar anotaciones
-                //"Arial",
-                //"Arial",
-                //"Arial",
+        InputStream is = generator.generateDiagram(
+                bpmnModel,
+                "png",
+                completedActivities,
+                activeActivities,
+                "Arial", "Arial", "Arial",
                 processEngine.getProcessEngineConfiguration().getClassLoader(),
-                1.0, true);
+                1.0,
+                true
+        );
 
-        String base64 = Base64.getEncoder().encodeToString(is.readAllBytes());
-        System.out.println(base64);
-
-        return is.readAllBytes();
+        // Escribe directamente los bytes al response
+        is.transferTo(response.getOutputStream());
+        response.flushBuffer(); // Asegura que la imagen se envíe
     }
-
 
 }
