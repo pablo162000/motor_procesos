@@ -7,8 +7,11 @@ import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.flowable.engine.IdentityService;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -27,16 +30,24 @@ public class MyService {
     @Autowired
     private TaskService taskService;
 
+    @Autowired
+    private IdentityService identityService;
 
-    public void startProcess(Integer propuestaId, Integer idEstudiante1,  Integer idDireccion) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("propuestaId", propuestaId);
-        variables.put("idEstudiante1", idEstudiante1);
-        variables.put("idDireccion", idDireccion);
-        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
-        logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
-        logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}",
-                propuestaId, idEstudiante1, idDireccion);
+    public void startProcess(Integer propuestaId, Integer idEstudiante1, Integer idDireccion) {
+        try {
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("propuestaId", propuestaId);
+            variables.put("idEstudiante1", idEstudiante1);
+            variables.put("idDireccion", idDireccion);
+            identityService.setAuthenticatedUserId(String.valueOf(idEstudiante1));
+            ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
+            logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
+            logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}",
+                    propuestaId, idEstudiante1, idDireccion);
+        } finally {
+            // Limpiar el usuario autenticado después del inicio del proceso
+            identityService.setAuthenticatedUserId(null);
+        }
     }
 
     public List<Task> getTasks(String assignee) {
