@@ -13,12 +13,12 @@ public class RecordatorioRevisor2 implements JavaDelegate {
 
     @Override
     public void execute(DelegateExecution execution) {
-        String idRevisor2 = (String) execution.getVariable("idRevisor2");
         String emailRevisor2 = (String) execution.getVariable("correoRevisor2");
         String nombreRevisor2 = (String) execution.getVariable("nombreRevisor2");
         String temaPropuesta = (String) execution.getVariable("temaPropuesta");
-        String correoDireccion = (String) execution.getVariable("correoDireccion");
+        String correoDireccion = (String) execution.getVariable("c");
         correoRestClient.notificacionRecordatorioRevisor(emailRevisor2, nombreRevisor2, temaPropuesta, correoDireccion);
+
 
     }
 }
