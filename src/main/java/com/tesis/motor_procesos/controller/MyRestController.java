@@ -186,4 +186,15 @@ public class MyRestController {
         response.flushBuffer(); // Asegura que la imagen se envíe
     }
 
+    @GetMapping("/activo/{propuestaId}")
+    public String obtenerProcesoActivo(@PathVariable String propuestaId) {
+        String idProceso = myService.obtenerIdInstanciaActivaPorPropuestaId(propuestaId);
+
+        if (idProceso != null) {
+            return idProceso;
+        } else {
+            return "No hay proceso activo con propuestaId: " + propuestaId;
+        }
+    }
+
 }

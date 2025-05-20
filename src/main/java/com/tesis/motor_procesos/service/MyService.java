@@ -88,4 +88,17 @@ public class MyService {
         System.out.println("✅ Tarea completada con éxito.");
     }
 
+
+    public String obtenerIdInstanciaActivaPorPropuestaId(String propuestaId) {
+        Integer propuestaIdNum = Integer.parseInt(propuestaId);
+
+        ProcessInstance instancia = runtimeService.createProcessInstanceQuery()
+                .variableValueEquals("propuestaId", propuestaIdNum)
+                .singleResult();
+
+        return instancia != null ? instancia.getId() : null;
+    }
+
+
+
 }
