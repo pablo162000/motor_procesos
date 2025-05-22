@@ -80,6 +80,14 @@ public class MyRestController {
     }
 
 
+    @GetMapping("/tasks/{assignee}")
+    public ResponseEntity<Integer> tareasPendientes(@PathVariable String assignee) {
+        List<Task> tasks = myService.getTasks(assignee);
+
+        return ResponseEntity.ok(tasks.size());
+    }
+
+
     @GetMapping("/tasks/by-assignee-and-key")
     public ResponseEntity<List<TaskRepresentation>> obtenerTareasPorAssigneeYKey(@RequestParam String assignee, @RequestParam String taskKey) {
         List<Task> tasks = myService.getTasksByAssigneeAndTaskKey(assignee, taskKey);
