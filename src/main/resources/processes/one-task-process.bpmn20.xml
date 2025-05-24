@@ -72,13 +72,13 @@
             </extensionElements>
         </userTask>
         <startEvent id="theStart" name="Envío Propuesta" flowable:formFieldValidation="true"></startEvent>
-        <userTask id="revisarR2" name="Revisar propuesta" flowable:assignee="${idRevisor2}" flowable:formFieldValidation="true">
+        <userTask id="revisarR2" name="Revisar propuesta R1" flowable:assignee="${idRevisor2}" flowable:formFieldValidation="true">
             <extensionElements>
                 <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
             </extensionElements>
         </userTask>
         <serviceTask id="recordarRevisor2" name="Recordatorio" flowable:delegateExpression="${recordatorioRevisor2}"></serviceTask>
-        <userTask id="revisarR1" name="Revisar propuesta" flowable:assignee="${idRevisor1}" flowable:formFieldValidation="true">
+        <userTask id="revisarR1" name="Revisar propuesta R2" flowable:assignee="${idRevisor1}" flowable:formFieldValidation="true">
             <extensionElements>
                 <modeler:initiator-can-complete xmlns:modeler="http://flowable.org/modeler"><![CDATA[false]]></modeler:initiator-can-complete>
             </extensionElements>

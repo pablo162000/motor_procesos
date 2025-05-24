@@ -1,7 +1,9 @@
 package com.tesis.motor_procesos.service;
 
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +28,8 @@ public class MyService {
 
     @Autowired
     private RuntimeService runtimeService;
-
+    @Autowired
+    private HistoryService historyService;
     @Autowired
     private TaskService taskService;
 
@@ -90,10 +93,20 @@ public class MyService {
 
 
     public String obtenerIdInstanciaActivaPorPropuestaId(String propuestaId) {
+/*
         Integer propuestaIdNum = Integer.parseInt(propuestaId);
 
         ProcessInstance instancia = runtimeService.createProcessInstanceQuery()
                 .variableValueEquals("propuestaId", propuestaIdNum)
+                .singleResult();
+
+        return instancia != null ? instancia.getId() : null;
+*/
+        Integer propuestaIdNum = Integer.parseInt(propuestaId);
+
+        HistoricProcessInstance instancia = historyService.createHistoricProcessInstanceQuery()
+                .variableValueEquals("propuestaId", propuestaIdNum)
+                .orderByProcessInstanceStartTime().desc() // opcional: para obtener la más reciente
                 .singleResult();
 
         return instancia != null ? instancia.getId() : null;
