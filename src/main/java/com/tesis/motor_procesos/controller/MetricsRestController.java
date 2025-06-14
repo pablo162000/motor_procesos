@@ -1,26 +1,24 @@
 package com.tesis.motor_procesos.controller;
 
-import com.tesis.motor_procesos.service.MetricsService;
-import com.tesis.motor_procesos.service.ProcessMetrics;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.history.HistoricProcessInstanceQuery;
+import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.engine.runtime.ProcessInstanceQuery;
+import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import java.io.ByteArrayOutputStream;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/metrics")
@@ -30,14 +28,252 @@ public class MetricsRestController {
     @Autowired
     private HistoryService historyService;
 
-    private final MetricsService metricsService;
 
-    public MetricsRestController(MetricsService metricsService) {
-        this.metricsService = metricsService;
+    @Autowired
+    private RuntimeService runtimeService;
+
+
+
+    @GetMapping("/proceso/{nombreproceso}/estado/activos")
+    public long getActivos(@PathVariable String nombreproceso,
+                           @RequestParam("idDireccion") Integer idDireccion,
+                           @RequestParam(value = "desde") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                           @RequestParam(value = "hasta") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+
+        ProcessInstanceQuery query =runtimeService.
+                createProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .active();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        return query.count();
     }
 
 
-    @GetMapping("/{processInstanceId}")
+    @GetMapping("/proceso/{nombreproceso}/estado/activos/fechacreacion")
+    public Map<String, Long> getActivosFechaCreacion(@PathVariable String nombreproceso,
+                                                     @RequestParam("idDireccion") Integer idDireccion,
+                                                     @RequestParam(value = "desde") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                     @RequestParam(value = "hasta") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        ProcessInstanceQuery query =runtimeService.
+                createProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .active();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+
+        List<ProcessInstance> instances = query.list();
+
+        return instances.stream()
+                .collect(Collectors.groupingBy(
+                        h -> h.getStartTime().toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .toString(),
+                        Collectors.counting()
+                ));
+    }
+
+
+    @GetMapping("/proceso/{nombreproceso}/estado/completado")
+    public long getCompletados(@PathVariable String nombreproceso,
+                               @RequestParam("idDireccion") Integer idDireccion,
+                               @RequestParam(value = "desde") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                               @RequestParam(value = "hasta") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+
+        return instances.stream().count();
+    }
+
+
+    @GetMapping("/proceso/{nombreproceso}/tareas/completadas")
+    public Map<String, Long> tareasCompletadasPorFecha(
+            @RequestParam("desde") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam("hasta") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam("idDireccion") Integer idDireccion,
+            @PathVariable String nombreproceso) {
+        // Convertir a instantes
+        Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+        HistoricTaskInstanceQuery query= historyService.
+                createHistoricTaskInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .taskCompletedAfter(Date.from(desdeInstant))
+                .taskCompletedBefore(Date.from(hastaInstant))
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.processVariableValueEquals("idDireccion", idDireccion);
+        }
+
+        List<HistoricTaskInstance> tareas =query.list();
+
+        // Agrupar por fecha de finalización (formato: yyyy-MM-dd)
+        return tareas.stream()
+                .filter(t -> t.getEndTime() != null)
+                .collect(Collectors.groupingBy(
+                        t -> t.getEndTime()
+                                .toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .toString(),
+                        Collectors.counting()
+                ));
+    }
+
+
+
+
+    @GetMapping("/proceso/{nombreproceso}/duracionPromedio")
+    public double calcularDuracionPromedio(@RequestParam("idDireccion") Integer idDireccion,
+                                           @PathVariable String nombreproceso) {
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        List<HistoricProcessInstance> instancias = query.list();
+
+        return instancias.stream()
+                .mapToLong(inst -> inst.getEndTime().getTime() - inst.getStartTime().getTime())
+                .average()
+                .orElse(0.0);
+    }
+
+    /*
+    @GetMapping("/usuarios/assignees")
+    public List<String> getAssignees() {
+        return historyService.createHistoricTaskInstanceQuery()
+                .list()
+                .stream()
+                .map(HistoricTaskInstance::getAssignee)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+     */
+/*
+    @GetMapping("/proceso/{nombreproceso}/completados-por-dia")
+    public Map<String, Long> getCompletadosPorDia(@PathVariable String nombreproceso,
+                                                  @RequestParam("idDireccion") Integer idDireccion) {
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        return instances.stream()
+                .collect(Collectors.groupingBy(
+                        h -> h.getEndTime().toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .toString(),
+                        Collectors.counting()
+                ));
+    }
+
+ */
+
+    @GetMapping("/proceso/{nombreproceso}/completados-por-dia")
+    public Map<String, Long> getCompletadosPorDiaRangoFechas(@PathVariable String nombreproceso,
+                                                             @RequestParam("desde") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                             @RequestParam("hasta") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+                                                             @RequestParam("idDireccion") Integer idDireccion) {
+
+        //Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        //Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        return instances.stream()
+                .collect(Collectors.groupingBy(
+                        h -> h.getEndTime().toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .toString(),
+                        Collectors.counting()
+                ));
+    }
+
+
+
+
+    @GetMapping("/instancia/{processInstanceId}")
     public ResponseEntity<Map<String, Object>> obtenerMetricas(@PathVariable String processInstanceId) {
         Map<String, Object> metrics = new HashMap<>();
 
@@ -56,13 +292,25 @@ public class MetricsRestController {
             metrics.put("duracionTotalProcesoMillis", durationMillis);
         }
 
+        List<String> tiposExcluidos = List.of(
+                "boundaryEvent",
+                "exclusiveGateway",
+                "startEvent",
+                "endEvent",
+                "sequenceFlow",
+                "parallelGateway"
+        );
+
         // Actividades históricas
         List<org.flowable.engine.history.HistoricActivityInstance> actividades =
                 historyService.createHistoricActivityInstanceQuery()
                         .processInstanceId(processInstanceId)
                         .orderByHistoricActivityInstanceStartTime()
                         .asc()
-                        .list();
+                        .list()
+                        .stream()
+                        .filter(a -> !tiposExcluidos.contains(a.getActivityType()))
+                        .collect(Collectors.toList());
 
         List<Map<String, Object>> actividadMetrics = new ArrayList<>();
         Map<String, List<Long>> duracionesPorTipo = new HashMap<>();
@@ -120,13 +368,31 @@ public class MetricsRestController {
     }
 
 
-    @GetMapping("/procesos/{processDefinitionKey}")
-    public ResponseEntity<?> getMetrics(@PathVariable String processDefinitionKey) {
+    @GetMapping("/procesos/{nombreproceso}")
+    public ResponseEntity<?> getMetrics(@PathVariable String nombreproceso,
+                                        @RequestParam("idDireccion") Integer idDireccion,
+                                        @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                        @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 
-        List<HistoricProcessInstance> instances = historyService.createHistoricProcessInstanceQuery()
-                .processDefinitionKey(processDefinitionKey)
-                .finished()
-                .list();
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
 
         if (instances.isEmpty()) {
             return ResponseEntity.ok("No hay instancias finalizadas para ese proceso.");
@@ -138,14 +404,30 @@ public class MetricsRestController {
         Map<String, Long> userDurations = new HashMap<>();
         Map<String, Integer> userCounts = new HashMap<>();
 
+
+
         for (HistoricProcessInstance instance : instances) {
             totalDuration += instance.getDurationInMillis();
+
+            List<String> tiposExcluidos = List.of(
+                    "boundaryEvent",
+                    "exclusiveGateway",
+                    "startEvent",
+                    "endEvent",
+                    "sequenceFlow",
+                    "parallelGateway"
+            );
+
 
             List<HistoricActivityInstance> activities = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(instance.getId())
                     .finished()
-                    .list();
+                    .list()
+                    .stream()
+                    .filter(a -> !tiposExcluidos.contains(a.getActivityType()))
+                    .collect(Collectors.toList());
+
 
             for (HistoricActivityInstance activity : activities) {
                 if (activity.getDurationInMillis() != null) {
@@ -178,36 +460,82 @@ public class MetricsRestController {
             averageActivityDurations.put(actId, avg);
         }
 
+        averageActivityDurations.put("CalifiacaionRevisores", averageActivityDurations.get("revisarR1")+averageActivityDurations.get("revisarR2"));
+        averageActivityDurations.remove("revisarR1");
+        averageActivityDurations.remove("revisarR2");
+
+        averageActivityDurations.put("RespuestaFinal", averageActivityDurations.get("generarActa")+averageActivityDurations.get("notificarRechazo"));
+        averageActivityDurations.remove("notificarRechazo");
+        averageActivityDurations.remove("generarActa");
+
         Map<String, Double> averageUserDurations = new HashMap<>();
         for (String user : userDurations.keySet()) {
             double avg = userDurations.get(user) / (double) userCounts.get(user);
             averageUserDurations.put(user, avg);
         }
 
+        Map<String, String> fastAndLow = new HashMap<>();
+
+       fastAndLow.put("Tarea mas rapida", averageActivityDurations.entrySet()
+               .stream()
+               .min(Map.Entry.comparingByValue())
+               .orElse(null).getKey()
+       );
+
+        fastAndLow.put("Tarea mas lenta", averageActivityDurations.entrySet()
+                .stream()
+                .max(Map.Entry.comparingByValue())
+                .orElse(null).getKey()
+        );
+
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalInstances", instances.size());
         result.put("averageProcessDurationMs", averageProcessDuration);
         result.put("averageActivityDurationsMs", averageActivityDurations);
         result.put("averageUserDurationsMs", averageUserDurations);
+        result.put("TareasFastaAndLow", fastAndLow);
 
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/procesos/{processDefinitionKey}/revisiones-por-usuario")
-    public ResponseEntity<Map<String, Object>> getTopRevisores(@PathVariable String processDefinitionKey) {
+    @GetMapping("/procesos/{proceso}/revisiones-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopRevisores(@PathVariable String proceso,
+                                                               @RequestParam("idDireccion") Integer idDireccion,
+                                                               @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                               @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 
-        List<HistoricProcessInstance> instances = historyService.createHistoricProcessInstanceQuery()
-                .processDefinitionKey(processDefinitionKey)
-                .finished()
-                .list();
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(proceso)
+                .finished();
+
+        if (!Objects.equals(idDireccion, 0)) {
+            query = query.variableValueEquals("idDireccion", idDireccion);
+        }
+
+        if(!Objects.equals(hasta, 0) && !Objects.equals(desde, 0)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
 
         if (instances.isEmpty()) {
             return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso."));
+
+
         }
 
         Map<String, Integer> revisionesPorUsuario = new HashMap<>();
 
+        System.out.println("------"+instances);
+
         for (HistoricProcessInstance instance : instances) {
+
             List<HistoricActivityInstance> actividades = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(instance.getId())
@@ -247,83 +575,6 @@ public class MetricsRestController {
         return ResponseEntity.ok(response);
     }
 
-
-
-    @GetMapping("/procesos/{processDefinitionKey}/export")
-    public ResponseEntity<byte[]> exportMetricsToExcel(@PathVariable String processDefinitionKey) throws Exception {
-        ProcessMetrics metrics = metricsService.getProcessMetrics(processDefinitionKey);
-
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Métricas");
-
-        int rowNum = 0;
-        Row row;
-        Cell cell;
-
-        // Header general
-        row = sheet.createRow(rowNum++);
-        cell = row.createCell(0);
-        cell.setCellValue("Total Instancias");
-        cell = row.createCell(1);
-        cell.setCellValue(metrics.getTotalInstances());
-
-        row = sheet.createRow(rowNum++);
-        cell = row.createCell(0);
-        cell.setCellValue("Duración Promedio Proceso (ms)");
-        cell = row.createCell(1);
-        cell.setCellValue(metrics.getAverageProcessDurationMs());
-
-        // Espacio
-        rowNum++;
-
-        // Duraciones por actividad
-        row = sheet.createRow(rowNum++);
-        cell = row.createCell(0);
-        cell.setCellValue("Actividad");
-        cell = row.createCell(1);
-        cell.setCellValue("Duración Promedio (ms)");
-
-        for (Map.Entry<String, Double> entry : metrics.getAverageActivityDurationsMs().entrySet()) {
-            row = sheet.createRow(rowNum++);
-            cell = row.createCell(0);
-            cell.setCellValue(entry.getKey());
-            cell = row.createCell(1);
-            cell.setCellValue(entry.getValue());
-        }
-
-        // Espacio
-        rowNum++;
-
-        // Duraciones por usuario
-        row = sheet.createRow(rowNum++);
-        cell = row.createCell(0);
-        cell.setCellValue("Usuario ID");
-        cell = row.createCell(1);
-        cell.setCellValue("Duración Promedio (ms)");
-
-        for (Map.Entry<String, Double> entry : metrics.getAverageUserDurationsMs().entrySet()) {
-            row = sheet.createRow(rowNum++);
-            cell = row.createCell(0);
-            cell.setCellValue(entry.getKey());
-            cell = row.createCell(1);
-            cell.setCellValue(entry.getValue());
-        }
-
-        // Auto-ajustar columnas
-        sheet.autoSizeColumn(0);
-        sheet.autoSizeColumn(1);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        workbook.write(out);
-        workbook.close();
-
-        byte[] bytes = out.toByteArray();
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=metrics_" + processDefinitionKey + ".xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(bytes);
-    }
 
 
 }
