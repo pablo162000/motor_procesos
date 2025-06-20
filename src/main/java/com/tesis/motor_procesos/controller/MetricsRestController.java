@@ -473,7 +473,8 @@ public class MetricsRestController {
 
     @GetMapping("/procesos/{nombreproceso}")
     public ResponseEntity<?> getMetrics(@PathVariable String nombreproceso,
-                                        @RequestParam("idDireccion") Integer idDireccion,
+                                        @RequestParam(value ="carrera", required = false) String carrera,
+                                        @RequestParam(value ="periodo", required = false) String periodo,
                                         @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
                                         @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 
@@ -482,48 +483,36 @@ public class MetricsRestController {
                 .processDefinitionKey(nombreproceso)
                 .finished();
 
-        if (!Objects.equals(idDireccion, 0)) {
-            query = query.variableValueEquals("idDireccion", idDireccion);
+
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+
         }
 
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
 
-        if((desde!=null) && (hasta!=null)){
+        if (desde != null && hasta != null) {
             Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
-
-            query = query.startedAfter(Date.from(desdeInstant))
-                    .startedBefore(Date.from(hastaInstant));
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            query = query.startedAfter(Date.from(desdeInstant)).startedBefore(Date.from(hastaInstant));
         }
 
         List<HistoricProcessInstance> instances = query.list();
-
-
         if (instances.isEmpty()) {
             return ResponseEntity.ok(Collections.emptyMap());
         }
 
-        Double totalDuration = 0.0;
+        double totalDuration = 0.0;
         Map<String, List<Double>> activityDurations = new HashMap<>();
         Map<String, Integer> activityCounts = new HashMap<>();
         Map<String, Double> userDurations = new HashMap<>();
         Map<String, Integer> userCounts = new HashMap<>();
         Map<String, Map<String, List<Double>>> duracionesPorActividadYUsuario = new HashMap<>();
-        Map<String, Map<String, Double>> promedioActividadUsuario = new HashMap<>();
-
-
 
         for (HistoricProcessInstance instance : instances) {
             totalDuration += instance.getDurationInMillis();
-
-            List<String> tiposExcluidos = List.of(
-                    "boundaryEvent",
-                    "exclusiveGateway",
-                    "startEvent",
-                    "endEvent",
-                    "sequenceFlow",
-                    "parallelGateway"
-            );
-
 
             List<HistoricActivityInstance> activities = historyService
                     .createHistoricActivityInstanceQuery()
@@ -531,168 +520,156 @@ public class MetricsRestController {
                     .finished()
                     .list()
                     .stream()
-                    .filter(a -> !tiposExcluidos.contains(a.getActivityType()))
+                    .filter(a -> !List.of("boundaryEvent", "exclusiveGateway", "startEvent", "endEvent", "sequenceFlow", "parallelGateway")
+                            .contains(a.getActivityType()))
                     .collect(Collectors.toList());
 
-
             for (HistoricActivityInstance activity : activities) {
-                if (activity.getDurationInMillis() != null) {
-                    // Duración por actividad
-                    activityDurations
-                            .computeIfAbsent(activity.getActivityId(), k -> new ArrayList<>())
-                            .add(activity.getDurationInMillis().doubleValue());
+                if (activity.getDurationInMillis() == null) continue;
 
-                    activityCounts.put(activity.getActivityId(),
-                            activityCounts.getOrDefault(activity.getActivityId(), 0) + 1);
+                // Duración por actividad
+                activityDurations
+                        .computeIfAbsent(activity.getActivityId(), k -> new ArrayList<>())
+                        .add(activity.getDurationInMillis().doubleValue());
 
-                    // Duración por usuario
-                    if (activity.getAssignee() != null) {
-                        userDurations.put(activity.getAssignee(),
-                                userDurations.getOrDefault(activity.getAssignee(), 0.0) + activity.getDurationInMillis());
+                activityCounts.put(activity.getActivityId(),
+                        activityCounts.getOrDefault(activity.getActivityId(), 0) + 1);
 
-                        userCounts.put(activity.getAssignee(),
-                                userCounts.getOrDefault(activity.getAssignee(), 0) + 1);
+                // Obtener nombre de la variable asociada a la actividad
+                String nombreVariable = switch (activity.getActivityId()) {
+                    case "designarRevisores" -> "nombreSecretaria";
+                    case "revisarR1" -> "nombreRevisor1";
+                    case "revisarR2" -> "nombreRevisor2";
+                    case "validacionTema", "generarActa", "notificarRechazo" -> "carrera";
+                    default -> null;
+                };
+
+                String usuario = "Sin Responsable";
+                if (nombreVariable != null) {
+                    HistoricVariableInstance variable = historyService
+                            .createHistoricVariableInstanceQuery()
+                            .processInstanceId(instance.getId())
+                            .variableName(nombreVariable)
+                            .singleResult();
+
+                    if (variable != null && variable.getValue() != null) {
+                        usuario = String.valueOf(variable.getValue());
                     }
-
-                    if (activity.getDurationInMillis() != null && activity.getAssignee() != null) {
-                        // Duración por actividad y usuario
-                        duracionesPorActividadYUsuario
-                                .computeIfAbsent(activity.getActivityId(), k -> new HashMap<>())
-                                .computeIfAbsent(activity.getAssignee(), k -> new ArrayList<>())
-                                .add(activity.getDurationInMillis().doubleValue());
-                    }
-
-                    for (String actividad : duracionesPorActividadYUsuario.keySet()) {
-                        Map<String, List<Double>> porUsuario = duracionesPorActividadYUsuario.get(actividad);
-                        Map<String, Double> promedios = new HashMap<>();
-
-                        for (String usuario : porUsuario.keySet()) {
-                            List<Double> duraciones = porUsuario.get(usuario);
-                            Double promedio = duraciones.stream().mapToDouble(Double::doubleValue).average().orElse(0.0)/ 86400000.0;
-                            promedios.put(usuario, Math.round(promedio*1e7) / 1e7);
-                        }
-
-                        promedioActividadUsuario.put(actividad, promedios);
-                    }
-
                 }
 
+                // Duración por usuario
+                userDurations.put(usuario,
+                        userDurations.getOrDefault(usuario, 0.0) + activity.getDurationInMillis());
+
+                userCounts.put(usuario,
+                        userCounts.getOrDefault(usuario, 0) + 1);
+
+                // Duración por actividad y usuario
+                duracionesPorActividadYUsuario
+                        .computeIfAbsent(activity.getActivityId(), k -> new HashMap<>())
+                        .computeIfAbsent(usuario, k -> new ArrayList<>())
+                        .add(activity.getDurationInMillis().doubleValue());
+            }
+        }
+
+        // Calcular promedios por actividad y usuario
+        Map<String, Map<String, Double>> promedioActividadUsuario = new HashMap<>();
+        for (var entryActividad : duracionesPorActividadYUsuario.entrySet()) {
+            String actividad = entryActividad.getKey();
+            Map<String, List<Double>> porUsuario = entryActividad.getValue();
+            Map<String, Double> promedios = new HashMap<>();
+
+            for (var entryUsuario : porUsuario.entrySet()) {
+                double promedio = entryUsuario.getValue().stream().mapToDouble(Double::doubleValue).average().orElse(0.0) / 86400000.0;
+                promedios.put(entryUsuario.getKey(), Math.round(promedio * 1e7) / 1e7);
             }
 
+            promedioActividadUsuario.put(actividad, promedios);
         }
 
-        double averageProcessDuration = Math.round((totalDuration / (double) instances.size()/ 86400000.0)* 1e7) / 1e7;
-
+        double averageProcessDuration = Math.round((totalDuration / instances.size() / 86400000.0) * 1e7) / 1e7;
 
         Map<String, Double> averageActivityDurations = new HashMap<>();
-        for (String actId : activityDurations.keySet()) {
-            List<Double> durations = activityDurations.get(actId);
-            double avg = durations.stream().mapToDouble(Double::doubleValue).average().orElse(0)/ 86400000.0;
-            Double avgDias =Math.round(avg * 1e7) / 1e7;
-            averageActivityDurations.put(actId, avgDias);
+        for (var entry : activityDurations.entrySet()) {
+            double avg = entry.getValue().stream().mapToDouble(Double::doubleValue).average().orElse(0) / 86400000.0;
+            averageActivityDurations.put(entry.getKey(), Math.round(avg * 1e7) / 1e7);
         }
 
-
-        averageActivityDurations.put("CalifiacaionRevisores", (averageActivityDurations.get("revisarR1")+averageActivityDurations.get("revisarR2"))/2);
+        // Agrupar revisarR1 y revisarR2 en CalificacionRevisores
+        Double r1 = averageActivityDurations.get("revisarR1");
+        Double r2 = averageActivityDurations.get("revisarR2");
+        if (r1 != null && r2 != null) {
+            averageActivityDurations.put("CalifiacaionRevisores", (r1 + r2) / 2);
+        } else if (r1 != null) {
+            averageActivityDurations.put("CalifiacaionRevisores", r1);
+        } else if (r2 != null) {
+            averageActivityDurations.put("CalifiacaionRevisores", r2);
+        }
         averageActivityDurations.remove("revisarR1");
         averageActivityDurations.remove("revisarR2");
 
+        // Agrupar generarActa y notificarRechazo en RespuestaFinal
+        Double acta = averageActivityDurations.get("generarActa");
+        Double rechazo = averageActivityDurations.get("notificarRechazo");
 
-        Double generarActaValor = averageActivityDurations.get("generarActa");
-        Double notificarRechazoValor = averageActivityDurations.get("notificarRechazo");
-
-        if (generarActaValor != null && notificarRechazoValor != null) {
-            // Ambos existen: hacer el promedio
-            averageActivityDurations.put("RespuestaFinal", (generarActaValor + notificarRechazoValor) / 2);
-        } else if (generarActaValor != null) {
-            // Solo existe generarActa
-            averageActivityDurations.put("RespuestaFinal", generarActaValor);
-        } else if (notificarRechazoValor != null) {
-            // Solo existe notificarRechazo
-            averageActivityDurations.put("RespuestaFinal", notificarRechazoValor);
+        if (acta != null && rechazo != null) {
+            averageActivityDurations.put("RespuestaFinal", (acta + rechazo) / 2);
+        } else if (acta != null) {
+            averageActivityDurations.put("RespuestaFinal", acta);
+        } else if (rechazo != null) {
+            averageActivityDurations.put("RespuestaFinal", rechazo);
         }
-
-// Eliminar las claves originales
         averageActivityDurations.remove("generarActa");
         averageActivityDurations.remove("notificarRechazo");
 
+        // Promedios por usuario
+        Map<String, Double> averageUserDurations = new HashMap<>();
+        for (var entry : userDurations.entrySet()) {
+            double avg = entry.getValue() / userCounts.get(entry.getKey()) / 86400000.0;
+            averageUserDurations.put(entry.getKey(), Math.round(avg * 1e7) / 1e7);
+        }
 
+        // Tarea más rápida y más lenta
+        Map<String, String> fastAndLow = new HashMap<>();
+        averageActivityDurations.entrySet().stream().min(Map.Entry.comparingByValue())
+                .ifPresent(e -> fastAndLow.put("Tarea mas rapida", e.getKey()));
+        averageActivityDurations.entrySet().stream().max(Map.Entry.comparingByValue())
+                .ifPresent(e -> fastAndLow.put("Tarea mas lenta", e.getKey()));
+
+        // Secciones por rol
         Map<String, Map<String, Double>> Secretarias = new HashMap<>();
-
-
-        Secretarias.put("DesignacionRevisores", promedioActividadUsuario.get("designarRevisores"));
-
-        //------------------------------------------------------------------------
+        if (promedioActividadUsuario.containsKey("designarRevisores")) {
+            Secretarias.put("DesignacionRevisores", promedioActividadUsuario.get("designarRevisores"));
+        }
 
         Map<String, Double> revisoresCombinados = new HashMap<>();
-
-        revisoresCombinados.putAll(promedioActividadUsuario.get("revisarR1"));
-
-        promedioActividadUsuario.get("revisarR2").forEach((usuario, duracion) ->
-                revisoresCombinados.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2)
-        );
-
-        //------------------------------------------------------------------------
+        Map<String, Double> r1porUsuario = promedioActividadUsuario.getOrDefault("revisarR1", Map.of());
+        Map<String, Double> r2porUsuario = promedioActividadUsuario.getOrDefault("revisarR2", Map.of());
+        revisoresCombinados.putAll(r1porUsuario);
+        r2porUsuario.forEach((usuario, duracion) ->
+                revisoresCombinados.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2));
 
         Map<String, Double> direccionCombinada = new HashMap<>();
+        Map<String, Double> generarActaUsuario = promedioActividadUsuario.getOrDefault("generarActa", Map.of());
+        Map<String, Double> notificarRechazoUsuario = promedioActividadUsuario.getOrDefault("notificarRechazo", Map.of());
+        direccionCombinada.putAll(generarActaUsuario);
+        notificarRechazoUsuario.forEach((usuario, duracion) ->
+                direccionCombinada.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2));
 
-// Solo copiar si existe "generarActa"
-        Map<String, Double> generarActa = promedioActividadUsuario.get("generarActa");
-        if (generarActa != null) {
-            direccionCombinada.putAll(generarActa);
-        }
-
-// Si existe "notificarRechazo", combinamos promediando por usuario
-        Map<String, Double> notificarRechazo = promedioActividadUsuario.get("notificarRechazo");
-        if (notificarRechazo != null) {
-            notificarRechazo.forEach((usuario, duracion) ->
-                    direccionCombinada.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2)
-            );
-        }
-
-// Crear el mapa final
         Map<String, Map<String, Double>> direccion = new HashMap<>();
-
-// Agregar "validacionTema" solo si existe
         Map<String, Double> validacionTema = promedioActividadUsuario.get("validacionTema");
         if (validacionTema != null) {
             direccion.put("validacionTema", validacionTema);
         }
-
-// Agregar siempre la respuesta final (aunque esté vacía)
         direccion.put("respuestaFinal", direccionCombinada);
 
-
-        Map<String, Double> averageUserDurations = new HashMap<>();
-        for (String user : userDurations.keySet()) {
-            Double avg = userDurations.get(user) / (double) userCounts.get(user)/ 86400000.0;
-            Double avgDias =Math.round(avg * 1e7) / 1e7;
-            averageUserDurations.put(user, avgDias);
-        }
-
-
-        Map<String, String> fastAndLow = new HashMap<>();
-
-       fastAndLow.put("Tarea mas rapida", averageActivityDurations.entrySet()
-               .stream()
-               .min(Map.Entry.comparingByValue())
-               .orElse(null).getKey()
-       );
-
-        fastAndLow.put("Tarea mas lenta", averageActivityDurations.entrySet()
-                .stream()
-                .max(Map.Entry.comparingByValue())
-                .orElse(null).getKey()
-        );
-
-
+        // Resultado final
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalInstances", instances.size());
         result.put("averageProcessDurationDias", averageProcessDuration);
         result.put("averageActivityDurationsDias", averageActivityDurations);
         result.put("averageUserDurationsDias", averageUserDurations);
-        //result.put("promediosPorActividadYUsuario", promedioActividadUsuario);
-        result.put("secretarias", promedioActividadUsuario.get("designarRevisores"));
+        result.put("secretarias", Secretarias.get("DesignacionRevisores"));
         result.put("docentes", revisoresCombinados);
         result.put("direccion", direccion);
         result.put("TareasFastaAndLow", fastAndLow);
@@ -704,9 +681,10 @@ public class MetricsRestController {
     //---------------------------------------------------------------------------
     @GetMapping("/procesos/{nombreproceso}/roles")
     public ResponseEntity<?> getMetricsPorRoles(@PathVariable String nombreproceso,
-                                                @RequestParam("idDireccion") Integer idDireccion,
+                                                @RequestParam(value ="carrera", required = false) String carrera,
+                                                @RequestParam(value ="periodo", required = false) String periodo,
                                                 @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
-                                                @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+                                                @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
                                                 @RequestParam(value = "rol") Integer rol) {
 
         HistoricProcessInstanceQuery query = historyService
@@ -714,198 +692,164 @@ public class MetricsRestController {
                 .processDefinitionKey(nombreproceso)
                 .finished();
 
-        if (!Objects.equals(idDireccion, 0)) {
-            query = query.variableValueEquals("idDireccion", idDireccion);
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+
         }
 
-        if((desde!=null) && (hasta!=null)){
-            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
 
-            query = query.startedAfter(Date.from(desdeInstant))
-                    .startedBefore(Date.from(hastaInstant));
+
+        if (desde != null && hasta != null) {
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            query = query.startedAfter(Date.from(desdeInstant)).startedBefore(Date.from(hastaInstant));
         }
 
         List<HistoricProcessInstance> instances = query.list();
-
 
         if (instances.isEmpty()) {
             return ResponseEntity.ok(Collections.emptyMap());
         }
 
-        Double totalDuration = 0.0;
-        Map<String, List<Double>> activityDurations = new HashMap<>();
-        Map<String, Integer> activityCounts = new HashMap<>();
-        Map<String, Double> userDurations = new HashMap<>();
-        Map<String, Integer> userCounts = new HashMap<>();
         Map<String, Map<String, List<Double>>> duracionesPorActividadYUsuario = new HashMap<>();
-        Map<String, Map<String, Double>> promedioActividadUsuario = new HashMap<>();
-
-
 
         for (HistoricProcessInstance instance : instances) {
-            totalDuration += instance.getDurationInMillis();
-
-            List<String> tiposExcluidos = List.of(
-                    "boundaryEvent",
-                    "exclusiveGateway",
-                    "startEvent",
-                    "endEvent",
-                    "sequenceFlow",
-                    "parallelGateway"
-            );
-
-
             List<HistoricActivityInstance> activities = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(instance.getId())
                     .finished()
                     .list()
                     .stream()
-                    .filter(a -> !tiposExcluidos.contains(a.getActivityType()))
+                    .filter(a -> !List.of(
+                            "boundaryEvent", "exclusiveGateway", "startEvent",
+                            "endEvent", "sequenceFlow", "parallelGateway"
+                    ).contains(a.getActivityType()))
                     .collect(Collectors.toList());
 
-
             for (HistoricActivityInstance activity : activities) {
-                if (activity.getDurationInMillis() != null) {
-                    // Duración por actividad
-                    activityDurations
-                            .computeIfAbsent(activity.getActivityId(), k -> new ArrayList<>())
-                            .add(activity.getDurationInMillis().doubleValue());
+                if (activity.getDurationInMillis() == null) continue;
 
-                    activityCounts.put(activity.getActivityId(),
-                            activityCounts.getOrDefault(activity.getActivityId(), 0) + 1);
+                String nombreVariable = switch (activity.getActivityId()) {
+                    case "designarRevisores" -> "nombreSecretaria";
+                    case "revisarR1" -> "nombreRevisor1";
+                    case "revisarR2" -> "nombreRevisor2";
+                    case "validacionTema", "generarActa", "notificarRechazo" -> "carrera";
+                    default -> null;
+                };
 
-                    // Duración por usuario
-                    if (activity.getAssignee() != null) {
-                        userDurations.put(activity.getAssignee(),
-                                userDurations.getOrDefault(activity.getAssignee(), 0.0) + activity.getDurationInMillis());
+                String usuario = "Sin Responsable";
+                if (nombreVariable != null) {
+                    HistoricVariableInstance variable = historyService
+                            .createHistoricVariableInstanceQuery()
+                            .processInstanceId(instance.getId())
+                            .variableName(nombreVariable)
+                            .singleResult();
 
-                        userCounts.put(activity.getAssignee(),
-                                userCounts.getOrDefault(activity.getAssignee(), 0) + 1);
+                    if (variable != null && variable.getValue() != null) {
+                        usuario = String.valueOf(variable.getValue());
                     }
-
-                    if (activity.getDurationInMillis() != null && activity.getAssignee() != null) {
-                        // Duración por actividad y usuario
-                        duracionesPorActividadYUsuario
-                                .computeIfAbsent(activity.getActivityId(), k -> new HashMap<>())
-                                .computeIfAbsent(activity.getAssignee(), k -> new ArrayList<>())
-                                .add(activity.getDurationInMillis().doubleValue());
-                    }
-
-                    for (String actividad : duracionesPorActividadYUsuario.keySet()) {
-                        Map<String, List<Double>> porUsuario = duracionesPorActividadYUsuario.get(actividad);
-                        Map<String, Double> promedios = new HashMap<>();
-
-                        for (String usuario : porUsuario.keySet()) {
-                            List<Double> duraciones = porUsuario.get(usuario);
-                            Double promedio = duraciones.stream().mapToDouble(Double::doubleValue).average().orElse(0.0)/ 86400000.0;
-                            Double promedioDias = Math.round(promedio * 1e7) / 1e7;
-                            promedios.put(usuario, promedioDias);
-                        }
-
-                        promedioActividadUsuario.put(actividad, promedios);
-                    }
-
                 }
 
+                duracionesPorActividadYUsuario
+                        .computeIfAbsent(activity.getActivityId(), k -> new HashMap<>())
+                        .computeIfAbsent(usuario, k -> new ArrayList<>())
+                        .add(activity.getDurationInMillis().doubleValue());
             }
-
         }
 
+        // Calcular promedios por actividad y usuario (una sola vez)
+        Map<String, Map<String, Double>> promedioActividadUsuario = new HashMap<>();
 
-        //------------------------------------------------------------------------
+        for (var entryActividad : duracionesPorActividadYUsuario.entrySet()) {
+            String actividad = entryActividad.getKey();
+            Map<String, List<Double>> porUsuario = entryActividad.getValue();
+            Map<String, Double> promedios = new HashMap<>();
 
-        Map<String, Double> revisoresCombinados = new HashMap<>();
+            for (var entryUsuario : porUsuario.entrySet()) {
+                String usuario = entryUsuario.getKey();
+                List<Double> duraciones = entryUsuario.getValue();
+                double promedio = duraciones.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) / 86400000.0;
+                double promedioRedondeado = Math.round(promedio * 1e7) / 1e7;
+                promedios.put(usuario, promedioRedondeado);
+            }
 
-        //------------------------------------------------------------------------
-
-        Map<String, Double> direccionCombinada = new HashMap<>();
-
+            promedioActividadUsuario.put(actividad, promedios);
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
 
-        if (Integer.valueOf(0).equals(rol)) {
-            Map<String, Double> designacion = promedioActividadUsuario.get("designarRevisores");
-            if (designacion != null) {
-                result.put("secretarias", designacion);
-            }
-        } else if (Integer.valueOf(1).equals(rol)) {
-            Map<String, Double> revisarR1 = promedioActividadUsuario.get("revisarR1");
-            Map<String, Double> revisarR2 = promedioActividadUsuario.get("revisarR2");
+        if (rol == 0) {
+            result.put("secretarias", promedioActividadUsuario.getOrDefault("designarRevisores", Map.of()));
+        } else if (rol == 1) {
+            Map<String, Double> revisarR1 = promedioActividadUsuario.getOrDefault("revisarR1", Map.of());
+            Map<String, Double> revisarR2 = promedioActividadUsuario.getOrDefault("revisarR2", Map.of());
+            Map<String, Double> revisores = new HashMap<>(revisarR1);
 
-            if (revisarR1 != null) revisoresCombinados.putAll(revisarR1);
-            if (revisarR2 != null) {
-                revisarR2.forEach((usuario, duracion) ->
-                        revisoresCombinados.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2)
-                );
-            }
+            revisarR2.forEach((usuario, duracion) ->
+                    revisores.merge(usuario, duracion, (d1, d2) -> (d1 + d2) / 2)
+            );
 
-            result.put("docentes", revisoresCombinados);
+            result.put("docentes", revisores);
+        } else if (rol == 2) {
+            Map<String, Double> generarActa = promedioActividadUsuario.getOrDefault("generarActa", Map.of());
+            Map<String, Double> notificarRechazo = promedioActividadUsuario.getOrDefault("notificarRechazo", Map.of());
+            Map<String, Double> validacionTema = promedioActividadUsuario.getOrDefault("validacionTema", Map.of());
+            Map<String, Double> direccionCombinada = new HashMap<>();
 
-        } else if (Integer.valueOf(2).equals(rol)) {
+            Set<String> usuarios = new HashSet<>();
+            usuarios.addAll(generarActa.keySet());
+            usuarios.addAll(notificarRechazo.keySet());
 
-            Map<String, Map<String, Double>> direccion = new HashMap<>();
+            for (String usuario : usuarios) {
+                Double d1 = generarActa.get(usuario);
+                Double d2 = notificarRechazo.get(usuario);
 
-            Map<String, Double> generarActa = promedioActividadUsuario.get("generarActa");
-            Map<String, Double> notificarRechazo = promedioActividadUsuario.get("notificarRechazo");
-            Map<String, Double> validacionTema = promedioActividadUsuario.get("validacionTema");
-
-            if (generarActa != null && notificarRechazo != null) {
-                // Promediar cuando existen ambas
-                Set<String> usuarios = new HashSet<>();
-                usuarios.addAll(generarActa.keySet());
-                usuarios.addAll(notificarRechazo.keySet());
-
-                for (String usuario : usuarios) {
-                    Double duracion1 = generarActa.get(usuario);
-                    Double duracion2 = notificarRechazo.get(usuario);
-
-                    if (duracion1 != null && duracion2 != null) {
-                        direccionCombinada.put(usuario, (duracion1 + duracion2) / 2);
-                    } else if (duracion1 != null) {
-                        direccionCombinada.put(usuario, duracion1);
-                    } else {
-                        direccionCombinada.put(usuario, duracion2);
-                    }
+                if (d1 != null && d2 != null) {
+                    direccionCombinada.put(usuario, (d1 + d2) / 2);
+                } else if (d1 != null) {
+                    direccionCombinada.put(usuario, d1);
+                } else if (d2 != null) {
+                    direccionCombinada.put(usuario, d2);
                 }
-
-            } else if (generarActa != null) {
-                direccionCombinada.putAll(generarActa);
-            } else if (notificarRechazo != null) {
-                direccionCombinada.putAll(notificarRechazo);
             }
 
-            if (validacionTema != null) {
-                direccion.put("validacionTema", validacionTema);
-            }
+            Map<String, Object> direccion = new HashMap<>();
+            direccion.put("validacionTema", validacionTema);
             direccion.put("respuestaFinal", direccionCombinada);
-
             result.put("direccion", direccion);
-
-    } else {
+        } else {
             return ResponseEntity.badRequest().body("Ese rol no existe");
         }
 
-
-            return ResponseEntity.ok(result);
+        return ResponseEntity.ok(result);
     }
 
 
-    @GetMapping("/procesos/{proceso}/revisiones-por-usuario")
-    public ResponseEntity<Map<String, Object>> getTopRevisores(@PathVariable String proceso,
-                                                               @RequestParam("idDireccion") Integer idDireccion,
+
+    @GetMapping("/procesos/{nombreproceso}/revisiones-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopRevisores(@PathVariable String nombreproceso,
+                                                               @RequestParam(value ="carrera", required = false) String carrera,
+                                                               @RequestParam(value ="periodo", required = false) String periodo,
                                                                @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
                                                                @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
 
-        if (!Objects.equals(idDireccion, 0)) {
-            query = query.variableValueEquals("idDireccion", idDireccion);
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+
         }
+
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
+
 
         if((desde!=null) && (hasta!=null)){
             Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
@@ -925,7 +869,6 @@ public class MetricsRestController {
 
         Map<String, Integer> revisionesPorUsuario = new HashMap<>();
 
-        System.out.println("------"+instances);
 
         for (HistoricProcessInstance instance : instances) {
 
@@ -935,12 +878,38 @@ public class MetricsRestController {
                     .finished()
                     .list();
 
-            for (HistoricActivityInstance act : actividades) {
-                if (act.getActivityId() == null) continue;
 
-                if (act.getActivityId().equals("revisarR1") || act.getActivityId().equals("revisarR2")) {
-                    String usuario = act.getAssignee();
-                    if (usuario != null) {
+
+
+            for (HistoricActivityInstance act : actividades) {
+                String activityId = act.getActivityId();
+
+                if (activityId == null) continue;
+
+
+
+
+                if (act.getActivityId().equals("revisarR1")) {
+                    HistoricVariableInstance variable = historyService
+                            .createHistoricVariableInstanceQuery()
+                            .processInstanceId(instance.getId())
+                            .variableName("nombreRevisor1")
+                            .singleResult();
+
+                    if (variable != null) {
+                        String usuario = String.valueOf(variable.getValue());
+                        revisionesPorUsuario.put(usuario,
+                                revisionesPorUsuario.getOrDefault(usuario, 0) + 1);
+                    }
+                }else if (act.getActivityId().equals("revisarR2")){
+                    HistoricVariableInstance variable = historyService
+                            .createHistoricVariableInstanceQuery()
+                            .processInstanceId(instance.getId())
+                            .variableName("nombreRevisor2")
+                            .singleResult();
+
+                    if (variable != null) {
+                        String usuario = String.valueOf(variable.getValue());
                         revisionesPorUsuario.put(usuario,
                                 revisionesPorUsuario.getOrDefault(usuario, 0) + 1);
                     }
@@ -955,8 +924,8 @@ public class MetricsRestController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/procesos/{proceso}/tutorias-por-usuario")
-    public ResponseEntity<Map<String, Object>> getTopTutores(@PathVariable String proceso,
+    @GetMapping("/procesos/{nombreproceso}/tutorias-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopTutores(@PathVariable String nombreproceso,
                                                              @RequestParam(value ="carrera", required = false) String carrera,
                                                              @RequestParam(value ="periodo", required = false) String periodo,
                                                              @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
@@ -964,7 +933,7 @@ public class MetricsRestController {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
 
         if (carrera!=null) {
@@ -1036,8 +1005,8 @@ public class MetricsRestController {
 
 
 
-    @GetMapping("/procesos/{proceso}/estado/rechazo/tutorias-por-usuario")
-    public ResponseEntity<Map<String, Object>> getTopTutoresRechazados(@PathVariable String proceso,
+    @GetMapping("/procesos/{nombreproceso}/estado/rechazo/tutorias-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopTutoresRechazados(@PathVariable String nombreproceso,
                                                                @RequestParam(value ="carrera", required = false) String carrera,
                                                                @RequestParam(value ="periodo", required = false) String periodo,
                                                                @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
@@ -1045,7 +1014,7 @@ public class MetricsRestController {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
 
         if (carrera!=null) {
@@ -1114,8 +1083,8 @@ public class MetricsRestController {
 
 
 
-    @GetMapping("/procesos/{proceso}/estado/rechazo/vaidacion/tutorias-por-usuario")
-    public ResponseEntity<Map<String, Object>> getTopTutoresRechazadosValidadcion(@PathVariable String proceso,
+    @GetMapping("/procesos/{nombreproceso}/estado/rechazo/vaidacion/tutorias-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopTutoresRechazadosValidadcion(@PathVariable String nombreproceso,
                                                                                   @RequestParam(value ="carrera", required = false) String carrera,
                                                                                   @RequestParam(value ="periodo", required = false) String periodo,
                                                                                   @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
@@ -1123,7 +1092,7 @@ public class MetricsRestController {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
 
         if (carrera != null) {
@@ -1179,8 +1148,8 @@ public class MetricsRestController {
         return ResponseEntity.ok(Map.of("tutoriasNoValidadasPorUsuario", tutoriasPorUsuario));
     }
 
-    @GetMapping("/procesos/{proceso}/resumen")
-    public ResponseEntity<Map<String, Object>> getClasificacionProcesos(@PathVariable String proceso,
+    @GetMapping("/procesos/{nombreproceso}/resumen")
+    public ResponseEntity<Map<String, Object>> getClasificacionProcesos(@PathVariable String nombreproceso,
                                                                                   @RequestParam(value ="carrera", required = false) String carrera,
                                                                                   @RequestParam(value ="periodo", required = false) String periodo,
                                                                                   @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
@@ -1188,15 +1157,25 @@ public class MetricsRestController {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
+
+        ProcessInstanceQuery query2 =runtimeService.
+                createProcessInstanceQuery()
+                .processDefinitionKey(nombreproceso)
+                .active();
+
+
 
         if (carrera != null) {
             query = query.variableValueEquals("carrera", carrera);
+            query2 = query2.variableValueEquals("carrera", carrera);
+
         }
 
         if (periodo != null) {
             query = query.variableValueEquals("periodo", periodo);
+            query2 = query2.variableValueEquals("periodo", periodo);
         }
 
 
@@ -1206,21 +1185,28 @@ public class MetricsRestController {
 
             query = query.startedAfter(Date.from(desdeInstant))
                     .startedBefore(Date.from(hastaInstant));
+
+            query2 = query2.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
         }
 
         List<HistoricProcessInstance> instances = query.list();
 
         long totalInstanciasNoValidadas = 0;
+        long totalInstanciasActivas = 0;
         List<HistoricProcessInstance> instancesFiltradasNovalidadas = instances.stream()
                 .filter(i -> "theEnd".equals(i.getEndActivityId()))
                 .collect(Collectors.toList());
 
         totalInstanciasNoValidadas = instancesFiltradasNovalidadas.stream().count();
 
+        List<ProcessInstance> instances2 = query2.list();
 
+        totalInstanciasActivas = instances2.stream().count();
         long totalInstanciasAprobadas = 0;
         long totalInstanciasRechazadas = 0;
-        long total = instances.stream().count();
+        long totalInstanciasFianlizadas = instances.stream().count();
+        long totalInstancias = totalInstanciasFianlizadas + totalInstanciasActivas;
 
         for (HistoricProcessInstance instance : instances) {
             List<HistoricActivityInstance> actividades = historyService
@@ -1252,16 +1238,18 @@ public class MetricsRestController {
         valores.put("No validadas",totalInstanciasNoValidadas);
         valores.put("Rechazadas",totalInstanciasRechazadas);
         valores.put("Aprobadas",totalInstanciasAprobadas);
-        response.put("Total", total);
+        response.put("Total Procesos:", totalInstancias);
+        response.put("Instancias Activas:", totalInstanciasActivas);
+        response.put("Instancias Finalizadas:", totalInstanciasFianlizadas);
         response.put("Categoria", valores);
 
         return ResponseEntity.ok(response);
     }
 
 
-    @GetMapping("/procesos/{proceso}/tutorias-clasificadas")
+    @GetMapping("/procesos/{nombreproceso}/tutorias-clasificadas")
     public ResponseEntity<Map<String, Map<String, Integer>>> getTutoriasClasificadasPorUsuario(
-            @PathVariable String proceso,
+            @PathVariable String nombreproceso,
             @RequestParam(value = "carrera", required = false) String carrera,
             @RequestParam(value = "periodo", required = false) String periodo,
             @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
@@ -1269,7 +1257,7 @@ public class MetricsRestController {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
-                .processDefinitionKey(proceso)
+                .processDefinitionKey(nombreproceso)
                 .finished();
 
         if (carrera != null) {
