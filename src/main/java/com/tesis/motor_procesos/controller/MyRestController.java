@@ -48,11 +48,9 @@ public class MyRestController {
 
     @PostMapping("/iniciar")
     public ResponseEntity<String> iniciarProceso(
-            @RequestParam Integer propuestaId,
-            @RequestParam(required = false) Integer idEstudiante1,
-            @RequestParam Integer idDireccion )
+            @RequestBody(required = true) Map<String, Object> variables)
     {
-        myService.startProcess(propuestaId, idEstudiante1, idDireccion);
+        myService.startProcess(variables);
         return ResponseEntity.ok("Proceso iniciado con éxito.");
     }
 

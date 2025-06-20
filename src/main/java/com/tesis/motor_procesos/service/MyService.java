@@ -36,17 +36,14 @@ public class MyService {
     @Autowired
     private IdentityService identityService;
 
-    public void startProcess(Integer propuestaId, Integer idEstudiante1, Integer idDireccion) {
+    public void startProcess(Map<String, Object> variables) {
         try {
-            Map<String, Object> variables = new HashMap<>();
-            variables.put("propuestaId", propuestaId);
-            variables.put("idEstudiante1", idEstudiante1);
-            variables.put("idDireccion", idDireccion);
-            identityService.setAuthenticatedUserId(String.valueOf(idEstudiante1));
+
+            identityService.setAuthenticatedUserId(String.valueOf(variables.get("idEstudiante1")));
             ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("procesoTesis", variables);
             logger.info("✅ Proceso iniciado con ID: {}", processInstance.getId());
             logger.info("📄 Variables asociadas: propuestaId={}, idEstudiante1={}, idDireccion={}",
-                    propuestaId, idEstudiante1, idDireccion);
+                    variables.get("propuestaId"), variables.get("idEstudiante1"), variables.get("idDireccion"));
         } finally {
             // Limpiar el usuario autenticado después del inicio del proceso
             identityService.setAuthenticatedUserId(null);

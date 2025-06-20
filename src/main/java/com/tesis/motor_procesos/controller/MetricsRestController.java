@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/metrics")
@@ -947,40 +948,31 @@ public class MetricsRestController {
             }
         }
 
-        // Crear lista ordenada por cantidad descendente
-        List<Map.Entry<String, Integer>> ranking = revisionesPorUsuario.entrySet().stream()
-                .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
-                .limit(5)
-                .toList();
-
-        List<Map<String, Object>> top5 = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : ranking) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("usuario", entry.getKey());
-            item.put("cantidadRevisiones", entry.getValue());
-            top5.add(item);
-        }
 
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("rankingTop5Revisores", top5);
+        response.put("totalRevisionesPorUsuario", revisionesPorUsuario);
 
         return ResponseEntity.ok(response);
     }
 
-
     @GetMapping("/procesos/{proceso}/tutorias-por-usuario")
     public ResponseEntity<Map<String, Object>> getTopTutores(@PathVariable String proceso,
-                                                               @RequestParam("idDireccion") Integer idDireccion,
-                                                               @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
-                                                               @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+                                                             @RequestParam(value ="carrera", required = false) String carrera,
+                                                             @RequestParam(value ="periodo", required = false) String periodo,
+                                                             @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                             @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
                 .processDefinitionKey(proceso)
                 .finished();
 
-        if (!Objects.equals(idDireccion, 0)) {
-            query = query.variableValueEquals("idDireccion", idDireccion);
+        if (carrera!=null) {
+            query = query.variableValueEquals("carrera", carrera);
+        }
+
+        if (periodo!=null) {
+            query = query.variableValueEquals("periodo", periodo);
         }
 
         if((desde!=null) && (hasta!=null)){
@@ -1020,7 +1012,7 @@ public class MetricsRestController {
                     HistoricVariableInstance variable = historyService
                             .createHistoricVariableInstanceQuery()
                             .processInstanceId(instance.getId())
-                            .variableName("idTutor")
+                            .variableName("tutor")
                             .singleResult();
 
                     System.out.println("variable encontrada=..."+variable);
@@ -1034,24 +1026,320 @@ public class MetricsRestController {
             }
         }
 
-        // Crear lista ordenada por cantidad descendente
-        List<Map.Entry<String, Integer>> ranking = tutoriasPorUsuario.entrySet().stream()
-                .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
-                .limit(5)
-                .toList();
-
-        List<Map<String, Object>> top5 = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : ranking) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("usuario", entry.getKey());
-            item.put("cantidadTutorias", entry.getValue());
-            top5.add(item);
-        }
 
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("rankingTop5Tutores", top5);
+        response.put("turoeiasAprobadasPorUsuario", tutoriasPorUsuario);
 
         return ResponseEntity.ok(response);
     }
+
+
+
+
+    @GetMapping("/procesos/{proceso}/estado/rechazo/tutorias-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopTutoresRechazados(@PathVariable String proceso,
+                                                               @RequestParam(value ="carrera", required = false) String carrera,
+                                                               @RequestParam(value ="periodo", required = false) String periodo,
+                                                               @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                               @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(proceso)
+                .finished();
+
+        if (carrera!=null) {
+            query = query.variableValueEquals("carrera", carrera);
+        }
+
+        if (periodo!=null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
+
+        if((desde!=null) && (hasta!=null)){
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant(); // incluir el día 'hasta'
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        if (instances.isEmpty()) {
+            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso."));
+
+
+        }
+
+        Map<String, Integer> tutoriasPorUsuario = new HashMap<>();
+
+        System.out.println("------"+instances);
+
+        for (HistoricProcessInstance instance : instances) {
+            List<HistoricActivityInstance> actividades = historyService
+                    .createHistoricActivityInstanceQuery()
+                    .processInstanceId(instance.getId())
+                    .finished()
+                    .list();
+
+            for (HistoricActivityInstance act : actividades) {
+                String activityId = act.getActivityId();
+
+
+                if (activityId == null) continue;
+
+                if (activityId.equals("notificarRechazo")) {
+                    HistoricVariableInstance variable = historyService
+                            .createHistoricVariableInstanceQuery()
+                            .processInstanceId(instance.getId())
+                            .variableName("tutor")
+                            .singleResult();
+
+                    System.out.println("variable encontrada=..."+variable);
+
+                    if (variable != null) {
+                        String usuario = String.valueOf(variable.getValue());
+                        tutoriasPorUsuario.put(usuario,
+                                tutoriasPorUsuario.getOrDefault(usuario, 0) + 1);
+                    }
+                }
+            }
+        }
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("tutoriasRechazadasPorUsuario", tutoriasPorUsuario);
+
+        return ResponseEntity.ok(response);
+    }
+
+
+
+    @GetMapping("/procesos/{proceso}/estado/rechazo/vaidacion/tutorias-por-usuario")
+    public ResponseEntity<Map<String, Object>> getTopTutoresRechazadosValidadcion(@PathVariable String proceso,
+                                                                                  @RequestParam(value ="carrera", required = false) String carrera,
+                                                                                  @RequestParam(value ="periodo", required = false) String periodo,
+                                                                                  @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                                                  @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(proceso)
+                .finished();
+
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+        }
+
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
+
+
+        if ((desde != null) && (hasta != null)) {
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        List<HistoricProcessInstance> instancesFiltradas = instances.stream()
+                .filter(i -> "theEnd".equals(i.getEndActivityId()))
+                .collect(Collectors.toList());
+
+        if (instancesFiltradas.isEmpty()) {
+            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso con endActivityId 'theEnd2'."));
+        }
+
+        Map<String, Integer> tutoriasPorUsuario = new HashMap<>();
+
+        for (HistoricProcessInstance instance : instancesFiltradas) {
+            // Obtienes variable "tutor" una sola vez por instancia
+            HistoricVariableInstance variable = historyService
+                    .createHistoricVariableInstanceQuery()
+                    .processInstanceId(instance.getId())
+                    .variableName("tutor")
+                    .singleResult();
+
+            if (variable != null) {
+                String usuario = String.valueOf(variable.getValue());
+                tutoriasPorUsuario.put(usuario,
+                        tutoriasPorUsuario.getOrDefault(usuario, 0) + 1);
+            }
+            else {
+                // Si no hay variable tutor, cuentas como "Sin Tutor"
+                tutoriasPorUsuario.put("Sin Tutor",
+                        tutoriasPorUsuario.getOrDefault("Sin Tutor", 0) + 1);
+            }
+
+        }
+
+        return ResponseEntity.ok(Map.of("tutoriasNoValidadasPorUsuario", tutoriasPorUsuario));
+    }
+
+    @GetMapping("/procesos/{proceso}/resumen")
+    public ResponseEntity<Map<String, Object>> getClasificacionProcesos(@PathVariable String proceso,
+                                                                                  @RequestParam(value ="carrera", required = false) String carrera,
+                                                                                  @RequestParam(value ="periodo", required = false) String periodo,
+                                                                                  @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+                                                                                  @RequestParam(value = "hasta",required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(proceso)
+                .finished();
+
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+        }
+
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
+
+
+        if ((desde != null) && (hasta != null)) {
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+            query = query.startedAfter(Date.from(desdeInstant))
+                    .startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        long totalInstanciasNoValidadas = 0;
+        List<HistoricProcessInstance> instancesFiltradasNovalidadas = instances.stream()
+                .filter(i -> "theEnd".equals(i.getEndActivityId()))
+                .collect(Collectors.toList());
+
+        totalInstanciasNoValidadas = instancesFiltradasNovalidadas.stream().count();
+
+
+        long totalInstanciasAprobadas = 0;
+        long totalInstanciasRechazadas = 0;
+        long total = instances.stream().count();
+
+        for (HistoricProcessInstance instance : instances) {
+            List<HistoricActivityInstance> actividades = historyService
+                    .createHistoricActivityInstanceQuery()
+                    .processInstanceId(instance.getId())
+                    .finished()
+                    .list();
+
+            for (HistoricActivityInstance act : actividades) {
+                String activityId = act.getActivityId();
+
+
+                if (activityId == null) continue;
+
+                if (activityId.equals("generarActa")) {
+
+                    totalInstanciasAprobadas++;
+                }
+
+                if (activityId.equals("notificarRechazo")) {
+
+                    totalInstanciasRechazadas++;
+                }
+            }
+        }
+        Map<String, Object> valores = new LinkedHashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
+
+        valores.put("No validadas",totalInstanciasNoValidadas);
+        valores.put("Rechazadas",totalInstanciasRechazadas);
+        valores.put("Aprobadas",totalInstanciasAprobadas);
+        response.put("Total", total);
+        response.put("Categoria", valores);
+
+        return ResponseEntity.ok(response);
+    }
+
+
+    @GetMapping("/procesos/{proceso}/tutorias-clasificadas")
+    public ResponseEntity<Map<String, Map<String, Integer>>> getTutoriasClasificadasPorUsuario(
+            @PathVariable String proceso,
+            @RequestParam(value = "carrera", required = false) String carrera,
+            @RequestParam(value = "periodo", required = false) String periodo,
+            @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+
+        HistoricProcessInstanceQuery query = historyService
+                .createHistoricProcessInstanceQuery()
+                .processDefinitionKey(proceso)
+                .finished();
+
+        if (carrera != null) {
+            query = query.variableValueEquals("carrera", carrera);
+        }
+
+        if (periodo != null) {
+            query = query.variableValueEquals("periodo", periodo);
+        }
+
+        if (desde != null && hasta != null) {
+            Instant desdeInstant = desde.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant hastaInstant = hasta.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            query = query.startedAfter(Date.from(desdeInstant)).startedBefore(Date.from(hastaInstant));
+        }
+
+        List<HistoricProcessInstance> instances = query.list();
+
+        Map<String, Map<String, Integer>> resultado = new LinkedHashMap<>();
+
+        for (HistoricProcessInstance instance : instances) {
+            boolean fueAprobada = false;
+            boolean fueRechazada = false;
+            boolean fueNoValidada = "theEnd".equals(instance.getEndActivityId());
+
+            List<HistoricActivityInstance> actividades = historyService
+                    .createHistoricActivityInstanceQuery()
+                    .processInstanceId(instance.getId())
+                    .finished()
+                    .list();
+
+            for (HistoricActivityInstance act : actividades) {
+                String activityId = act.getActivityId();
+                if (activityId == null) continue;
+
+                if ("generarActa".equals(activityId)) {
+                    fueAprobada = true;
+                }
+
+                if ("notificarRechazo".equals(activityId)) {
+                    fueRechazada = true;
+                }
+            }
+
+
+            HistoricVariableInstance variable = historyService
+                    .createHistoricVariableInstanceQuery()
+                    .processInstanceId(instance.getId())
+                    .variableName("tutor")
+                    .singleResult();
+
+            String tutor = (variable != null) ? String.valueOf(variable.getValue()) : "Sin Tutor";
+
+            resultado.putIfAbsent(tutor, new LinkedHashMap<>());
+            Map<String, Integer> conteos = resultado.get(tutor);
+
+            if (fueAprobada) {
+                conteos.put("Aprobadas", conteos.getOrDefault("Aprobadas", 0) + 1);
+            }
+            if (fueRechazada) {
+                conteos.put("Rechazadas", conteos.getOrDefault("Rechazadas", 0) + 1);
+            }
+            if (fueNoValidada) {
+                conteos.put("No validadas", conteos.getOrDefault("No validadas", 0) + 1);
+            }
+        }
+
+        return ResponseEntity.ok(resultado);
+    }
+
+
 
 }
