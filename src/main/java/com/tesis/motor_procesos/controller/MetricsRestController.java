@@ -477,6 +477,7 @@ public class MetricsRestController {
                                         @RequestParam(value ="periodo", required = false) String periodo,
                                         @RequestParam(value = "desde", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
                                         @RequestParam(value = "hasta", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        System.out.println("Ingresa al reporte");
 
         HistoricProcessInstanceQuery query = historyService
                 .createHistoricProcessInstanceQuery()
