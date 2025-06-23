@@ -1238,6 +1238,7 @@ public class MetricsRestController {
         valores.put("No validadas",totalInstanciasNoValidadas);
         valores.put("Rechazadas",totalInstanciasRechazadas);
         valores.put("Aprobadas",totalInstanciasAprobadas);
+        valores.put("Activas",totalInstanciasActivas);
         response.put("Total Procesos:", totalInstancias);
         response.put("Instancias Activas:", totalInstanciasActivas);
         response.put("Instancias Finalizadas:", totalInstanciasFianlizadas);
