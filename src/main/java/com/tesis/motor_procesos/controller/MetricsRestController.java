@@ -862,7 +862,7 @@ public class MetricsRestController {
         List<HistoricProcessInstance> instances = query.list();
 
         if (instances.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso."));
+            return ResponseEntity.ok(Collections.emptyMap());
 
 
         }
@@ -955,7 +955,7 @@ public class MetricsRestController {
         List<HistoricProcessInstance> instances = query.list();
 
         if (instances.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso."));
+            return ResponseEntity.ok(Collections.emptyMap());
 
 
         }
@@ -1036,7 +1036,7 @@ public class MetricsRestController {
         List<HistoricProcessInstance> instances = query.list();
 
         if (instances.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso."));
+            return ResponseEntity.ok(Collections.emptyMap());
 
 
         }
@@ -1119,7 +1119,7 @@ public class MetricsRestController {
                 .collect(Collectors.toList());
 
         if (instancesFiltradas.isEmpty()) {
-            return ResponseEntity.ok(Map.of("mensaje", "No hay instancias finalizadas para ese proceso con endActivityId 'theEnd2'."));
+            return ResponseEntity.ok(Collections.emptyMap());
         }
 
         Map<String, Integer> tutoriasPorUsuario = new HashMap<>();
@@ -1207,6 +1207,14 @@ public class MetricsRestController {
         long totalInstanciasRechazadas = 0;
         long totalInstanciasFianlizadas = instances.stream().count();
         long totalInstancias = totalInstanciasFianlizadas + totalInstanciasActivas;
+
+
+        if(totalInstancias == 0){
+
+            return ResponseEntity.ok(Collections.emptyMap());
+
+        }
+
 
         for (HistoricProcessInstance instance : instances) {
             List<HistoricActivityInstance> actividades = historyService
